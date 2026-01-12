@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/stats_fragment"
-        android:name="org.readium.r2.testapp.stats.StatsFragment"
+        android:name="com.eqraa.reader.stats.StatsFragment"
         android:label="@string/title_stats"
         tools:layout="@layout/fragment_stats" />
 

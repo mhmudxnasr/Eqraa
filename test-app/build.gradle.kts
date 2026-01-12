@@ -52,10 +52,20 @@ android {
         compose = true
         buildConfig = true
     }
+    signingConfigs {
+        create("release") {
+            storeFile = file("../release.keystore")
+            storePassword = "eqraa123"
+            keyAlias = "eqraa"
+            keyPassword = "eqraa123"
+        }
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android.txt"))
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     packaging {

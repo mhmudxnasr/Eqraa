@@ -7,12 +7,12 @@
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/catalogFeed_list"
-        android:name="org.readium.r2.testapp.opds"
+        android:name="com.eqraa.reader.opds"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginLeft="16dp"
         android:layout_marginRight="16dp"
-        tools:context="org.readium.r2.testapp.opds"
+        tools:context="com.eqraa.reader.opds"
         tools:listitem="@layout/item_recycle_button" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton

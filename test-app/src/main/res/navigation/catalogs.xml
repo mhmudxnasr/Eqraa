@@ -7,7 +7,7 @@
 
     <fragment
         android:id="@+id/navigation_catalog_list"
-        android:name="org.readium.r2.testapp.catalogs.CatalogFeedListFragment"
+        android:name="com.eqraa.reader.catalogs.CatalogFeedListFragment"
         android:label="@string/title_catalogs"
         tools:layout="@layout/fragment_catalog_feed_list">
         <action
@@ -17,7 +17,7 @@
 
     <fragment
         android:id="@+id/navigation_catalog"
-        android:name="org.readium.r2.testapp.catalogs.CatalogFragment"
+        android:name="com.eqraa.reader.catalogs.CatalogFragment"
         tools:layout="@layout/fragment_catalog">
         <action
             android:id="@+id/action_navigation_catalog_to_navigation_catalog_detail"
@@ -29,7 +29,7 @@
 
     <fragment
         android:id="@+id/navigation_publication_detail"
-        android:name="org.readium.r2.testapp.catalogs.PublicationDetailFragment"
+        android:name="com.eqraa.reader.catalogs.PublicationDetailFragment"
         tools:layout="@layout/fragment_publication_detail" />
 
 </navigation>

@@ -96,11 +96,11 @@
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/bookshelf_bookList"
-                android:name="org.readium.r2.testapp.bookshelf"
+                android:name="com.eqraa.reader.bookshelf"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                tools:context="org.readium.r2.testapp.bookshelf"
+                tools:context="com.eqraa.reader.bookshelf"
                 tools:listitem="@layout/item_recycle_book" />
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

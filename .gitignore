@@ -33,3 +33,4 @@ sync-service/node_modules/
 .gradle/
 build/
 
+release.keystore
