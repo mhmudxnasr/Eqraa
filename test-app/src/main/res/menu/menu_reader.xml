@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context='org.readium.r2.testapp.reader.BaseReaderFragment'>
+
+    <item
+        android:id="@+id/action_settings"
+        android:icon="@drawable/ic_baseline_settings_24"
+        android:title="Settings"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/bookmark"
+        android:icon="@drawable/ic_baseline_bookmark_24"
+        android:title="@string/epubactivity_set_bookmark"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction"/>
+
+    <item
+        android:id="@+id/drm"
+        android:icon="@drawable/ic_baseline_enhanced_encryption_24"
+        android:visible="false"
+        android:title="@string/epubactivity_drm_info"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction"/>
+
+    <item
+        android:id="@+id/info"
+        android:icon="@drawable/ic_baseline_info_24"
+        android:title="@string/info"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction"/>
+
+
+    <item
+        android:id="@+id/toc"
+        android:icon="@drawable/ic_outline_menu_24"
+        android:title="@string/epubactivity_book_nav_options"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction"/>
+
+</menu>

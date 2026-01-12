@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="12dp">
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/bookshelf_cardView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="2dp"
+        app:layout_constraintDimensionRatio="2:3"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/bookshelf_coverImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/cover_image"
+            android:background="@color/subtle_light"/>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#0D000000" /> <!-- Slight shadow overlay on image if needed -->
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Progress Bar Line -->
+    <View
+        android:id="@+id/progress_background"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="24dp"
+        android:background="@color/subtle_light"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/bookshelf_cardView" />
+
+    <View
+        android:id="@+id/progress_bar"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:background="@color/textPrimary"
+        app:layout_constraintStart_toStartOf="@id/progress_background"
+        app:layout_constraintTop_toTopOf="@id/progress_background"
+        app:layout_constraintWidth_percent="0.45" />
+
+    <TextView
+        android:id="@+id/bookshelf_titleText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:letterSpacing="0.05"
+        android:maxLines="1"
+        android:textAllCaps="true"
+        android:textColor="@color/textPrimary"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/progress_background"
+        tools:text="THE GREAT GATSBY" />
+
+    <TextView
+        android:id="@+id/bookshelf_authorText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:letterSpacing="0.02"
+        android:maxLines="1"
+        android:textColor="@color/subtle_dark"
+        android:textSize="14sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/bookshelf_titleText"
+        tools:text="F. Scott Fitzgerald" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

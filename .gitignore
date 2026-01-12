@@ -1,0 +1,35 @@
+# Built files
+*.apk
+*.aab
+*.dex
+*.class
+build/
+.gradle/
+local.properties
+*.log
+*.txt
+check_env.txt
+gh_auth.txt
+gh_auth2.txt
+repos.txt
+build_*.txt
+serviceAccountKey.json
+.env
+**/.env
+**/serviceAccountKey.json
+google-services.json
+**/google-services.json
+
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Test outputs
+test-app/build/
+backend/node_modules/
+sync-service/node_modules/
+.gradle/
+build/
+

@@ -1,0 +1,15 @@
+[Unit]
+Description=Eqraa Firebase Sync Service
+Documentation=https://github.com/mahmud/eqraa
+After=network.target
+
+[Service]
+Environment=NODE_ENV=production
+Type=simple
+User=mahmud
+WorkingDirectory=/home/mahmud/Downloads/Eqraa/sync-service
+ExecStart=/usr/bin/node /home/mahmud/Downloads/Eqraa/sync-service/src/index.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

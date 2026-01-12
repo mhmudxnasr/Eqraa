@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- Header with cloud icon and count -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_baseline_cloud_24"
+            app:tint="@color/accentBlue" />
+
+        <TextView
+            android:id="@+id/cloud_book_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="0 books in cloud"
+            android:textSize="16sp"
+            android:textColor="@color/textPrimary" />
+
+    </LinearLayout>
+
+    <!-- Progress section (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/cloud_progress_section"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:id="@+id/cloud_progress_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/uploading_book"
+            android:textSize="14sp" />
+
+        <ProgressBar
+            android:id="@+id/cloud_progress_bar"
+            style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:max="100"
+            android:progress="0" />
+
+    </LinearLayout>
+
+    <!-- Cloud books list -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/cloud_books_list"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Empty state -->
+    <TextView
+        android:id="@+id/cloud_empty_state"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:gravity="center"
+        android:text="@string/no_cloud_books"
+        android:textColor="@android:color/darker_gray"
+        android:visibility="gone" />
+
+    <!-- Action buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_upload_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/upload_all_books"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:icon="@drawable/ic_baseline_cloud_upload_24"
+            app:iconGravity="start" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_refresh_cloud"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Refresh"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            app:icon="@drawable/ic_baseline_refresh_24"
+            app:iconGravity="start" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_check_connection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="0dp"
+            android:text="Check Connection"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:textColor="@android:color/holo_blue_dark"
+            app:icon="@drawable/ic_baseline_cloud_24"
+            app:iconTint="@android:color/holo_blue_dark"
+            app:iconGravity="start" />
+
+    </LinearLayout>
+
+</LinearLayout>

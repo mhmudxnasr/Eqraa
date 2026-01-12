@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/conflict_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/conflict_message"
+        android:textAppearance="?attr/textAppearanceBody1"
+        android:layout_marginBottom="16dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:layout_marginBottom="24dp">
+
+        <!-- Local Version -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="?attr/colorSurfaceVariant"
+            android:layout_marginEnd="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="On This Device"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textAllCaps="true"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/conflict_local_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="10:30 AM"
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/conflict_local_progress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="54%"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+        <!-- Cloud Version -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="?attr/colorSurfaceVariant"
+            android:layout_marginStart="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="In Cloud"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textAllCaps="true"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/conflict_cloud_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="11:45 AM"
+                android:textAppearance="?attr/textAppearanceBody2"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/conflict_cloud_progress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="62%"
+                android:textAppearance="?attr/textAppearanceHeadline6"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_keep_local"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Keep Local Version"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_keep_cloud"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Keep Cloud Version"
+        android:layout_marginTop="8dp" />
+
+</LinearLayout>

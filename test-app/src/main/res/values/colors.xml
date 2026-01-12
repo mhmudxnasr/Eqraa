@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background">#F8F9FA</color>
+    <color name="textPrimary">#1A1C1E</color>
+    <color name="accentBlue">#007AFF</color>
+    
+    <color name="background_light">#ffffff</color>
+    <color name="background_dark">#000000</color>
+    <color name="surface_light">#f8f8f8</color>
+    <color name="surface_dark">#121212</color>
+    <color name="subtle_light">#e5e5e5</color>
+    <color name="subtle_dark">#262626</color>
+    <color name="nav_glass_light">#F2ffffff</color> <!-- ~95% opacity white -->
+    <color name="nav_glass_dark">#F2000000</color> <!-- ~95% opacity black -->
+</resources>

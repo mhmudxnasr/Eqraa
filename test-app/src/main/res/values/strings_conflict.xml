@@ -1,0 +1,4 @@
+<resources>
+    <string name="conflict_title">Sync Conflict</string>
+    <string name="conflict_message">Different reading positions were found for this book. Which version would you like to keep?</string>
+</resources>

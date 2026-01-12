@@ -1,0 +1,14 @@
+{
+    "$schema": "https://railway.app/railway.schema.json",
+    "build": {
+        "rootDirectory": "sync-service",
+        "watchPatterns": [
+            "sync-service/**"
+        ]
+    },
+    "deploy": {
+        "startCommand": "node src/server.js",
+        "healthcheckPath": "/health",
+        "restartPolicyType": "ON_FAILURE"
+    }
+}

@@ -1,0 +1,19 @@
+<!--
+  Copyright 2023 Readium Foundation. All rights reserved.
+  Use of this source code is governed by the BSD-style license
+  available in the top-level LICENSE file of the project.
+-->
+
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.Material3.DayNight">
+
+    </style>
+
+    <style name="MainActivityTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+</resources>
