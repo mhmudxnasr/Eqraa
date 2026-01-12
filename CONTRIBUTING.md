@@ -22,8 +22,8 @@ We use [`ktlint`](https://github.com/pinterest/ktlint) to ensure consistent Kotl
 ### AI Companion
 If you are modifying the AI functionality, ensure that prompts remain concise and maintain the "Real World Vibe" analogy format.
 
-### Readium Foundation
-This project is built on the Readium Kotlin Toolkit. If you are making deep changes to the rendering engine, please refer to the [Readium documentation](https://readium.org).
+### Eqraa Foundation
+This project is built on the Eqraa Eqraa Toolkit. If you are making deep changes to the rendering engine, please refer to the [Eqraa documentation](https://readium.org).
 
 ---
 *Inspired by the passion for reading and technology.*

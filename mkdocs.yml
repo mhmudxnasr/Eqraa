@@ -1,8 +1,8 @@
-site_name: Readium Kotlin
+site_name: Eqraa Kotlin
 
 # Meta tags (placed in header)
-site_description: Readium Mobile is a toolkit for ebooks, audiobooks and comics written in Swift & Kotlin.
-site_author: Readium Foundation
+site_description: Eqraa Mobile is a toolkit for ebooks, audiobooks and comics written in Swift & Kotlin.
+site_author: Eqraa Foundation
 site_url: https://github.com/readium/kotlin-toolkit
 
 # Repository (add link to repository on each page)
@@ -10,7 +10,7 @@ repo_name: kotlin-toolkit
 repo_url: https://github.com/readium/kotlin-toolkit
 
 # Copyright (shown at the footer)
-copyright: 'Copyright &copy; 2023 Readium Foundation'
+copyright: 'Copyright &copy; 2023 Eqraa Foundation'
 
 # Material theme
 theme:

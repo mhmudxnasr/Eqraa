@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@color/nav_glass_light"
+        android:background="#FFFFFF"
         android:elevation="0dp"
         app:itemIconTint="@color/textPrimary"
         app:itemTextColor="@color/textPrimary"

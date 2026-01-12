@@ -1,4 +1,4 @@
-# Maintaining the Readium Kotlin toolkit
+# Maintaining the Eqraa Kotlin toolkit
 
 ## Releasing a new version
 
@@ -13,7 +13,7 @@ You are ready to release a new version of the Kotlin toolkit? Great, follow thes
         * `README`
         * `gradle.properties`
         * `test-app/build.gradle.kts`
-    5. Close the version in the `CHANGELOG.md` and `docs/migration-guide.md`, [for example](https://github.com/readium/kotlin-toolkit/commit/011e0d74adc66ec2073f746d815310b838af4fbf).
+    5. Close the version in the `CHANGELOG.md` and `docs/migration-guide.md`, [for example](https://github.com/mhmudxnasr/Eqraa/commit/011e0d74adc66ec2073f746d815310b838af4fbf).
     6. Create a PR to merge in `develop` and verify the CI workflows.
     7. Squash and merge the PR.
     8. Tag the new version from `develop`.
@@ -26,7 +26,7 @@ You are ready to release a new version of the Kotlin toolkit? Great, follow thes
 5. Create a new release on GitHub.
     * Add an APK to the release page **with LCP enabled**.
 6. Publish to Maven Central.
-    1. Verify that the [`Publish` workflow](https://github.com/readium/kotlin-toolkit/actions/workflows/publish.yml) successfully pushed and closed the release to Maven Central.
+    1. Verify that the [`Publish` workflow](https://github.com/mhmudxnasr/Eqraa/actions/workflows/publish.yml) successfully pushed and closed the release to Maven Central.
     2. Sign in to https://central.sonatype.com/publishing/deployments
     3. Verify the content of the components.
     4. Publish the components

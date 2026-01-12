@@ -20,10 +20,10 @@ android {
         minSdk = (property("android.minSdk") as String).toInt()
         targetSdk = (property("android.targetSdk") as String).toInt()
 
-        applicationId = "org.readium.r2reader"
+        applicationId = "com.eqraa.reader"
 
-        versionName = "2.1.0"
-        versionCode = 4
+        versionName = "3.0.0"
+        versionCode = 300
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters.add("armeabi-v7a")
@@ -69,7 +69,7 @@ android {
             assets.srcDirs("src/main/assets")
         }
     }
-    namespace = "org.readium.r2.testapp"
+    namespace = "com.eqraa.reader"
 }
 
 dependencies {

@@ -1,52 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
 <!--
   Copyright 2023 Readium Foundation. All rights reserved.
   Use of this source code is governed by the BSD-style license
   available in the top-level LICENSE file of the project.
 -->
 
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/catalogList_cardView"
     android:layout_width="120dp"
     android:layout_height="wrap_content"
-    android:layout_margin="5dp">
+    android:orientation="vertical"
+    android:layout_margin="8dp">
 
-    <LinearLayout
+    <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:orientation="vertical"
-        android:weightSum="4">
-
-
-        <FrameLayout
+        android:layout_height="180dp"
+        app:cardElevation="0dp"
+        app:cardCornerRadius="0dp"
+        app:cardBackgroundColor="@android:color/transparent">
+        
+        <ImageView
+            android:id="@+id/catalogList_coverImage"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            tools:ignore="UselessParent">
+            android:background="#EEE"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/cover_image" />
+            
+    </androidx.cardview.widget.CardView>
 
-            <ImageView
-                android:id="@+id/catalogList_coverImage"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:contentDescription="@string/cover_image" />
+    <TextView
+        android:id="@+id/catalogList_titleText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:maxLines="2"
+        android:ellipsize="end"
+        android:textColor="@color/textPrimary"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:fontFamily="@font/playfair_xml"
+        tools:text="Book Title Example" />
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="start|bottom"
-                android:background="@android:drawable/screen_background_dark_transparent"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/catalogList_titleText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="16dp"
-                    android:textColor="#FFFFFF"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-        </FrameLayout>
-
-    </LinearLayout>
-
-</androidx.cardview.widget.CardView>
+</LinearLayout>

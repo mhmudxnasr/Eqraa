@@ -1,5 +1,5 @@
 <!--
-  Copyright 2023 Readium Foundation. All rights reserved.
+  Copyright 2023 Eqraa. All rights reserved.
   Use of this source code is governed by the BSD-style license
   available in the top-level LICENSE file of the project.
 -->
@@ -18,16 +18,16 @@
 
     <string name="app_version_header">Version</string>
     <string name="app_version_label">App Version:</string>
-    <string name="app_version">2.2.0</string>
+    <string name="app_version">3.0.0</string>
     <string name="github_tab_label">GitHub Tag:</string>
-    <string name="github_tag">2.2.0</string>
+    <string name="github_tag">v3.0.0</string>
 
     <string name="copyright_label">Copyright</string>
-    <string name="copyright">\@ 2019 European Digital Reading Lab</string>
+    <string name="copyright">\@ 2024 Eqraa</string>
     <string name="bsd_license_label">[BSD-3 license]</string>
     <string name="bsd_license_label_accessible">[B S D 3 license]</string>
     <string name="acknowledgements_label">Acknowledgements</string>
-    <string name="acknowledgements_french_state">R2 Reader wouldn\'t have been developed without the financial help of the French state.</string>
+    <string name="acknowledgements_french_state">Eqraa Reader is built on open source technologies.</string>
     <string name="catalog_list_more">More</string>
     <string name="catalog_detail_download_button">Download</string>
 

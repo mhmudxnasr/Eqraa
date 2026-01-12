@@ -3,8 +3,8 @@ SCRIPTS_NAVIGATOR_WEB_PATH := readium/navigators/web/internals/scripts
 
 help:
 	@echo "Usage: make <target>\n\n\
-	  lint\t\t\tLint the Kotlin sources with ktlint\n\
-	  format\t\tFormat the Kotlin sources with ktlint\n\
+	  lint\t\t\tLint the Source code with ktlint\n\
+	  format\t\tFormat the Source code with ktlint\n\
 	  scripts\t\tBundle the Navigator EPUB scripts\n\
 	  update-a11y-l10n\tUpdate the Accessibility Metadata Display Guide localization files\n\
 	"

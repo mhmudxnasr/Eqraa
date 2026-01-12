@@ -1,36 +1,38 @@
-# Eqraa Reader V.25
+# Eqraa Reader v3.0.0
 
-**Eqraa Reader** is an advanced, open-source Arabic EPUB reader designed for a seamless and immersive reading experience. It features an AI companion, real-time cloud synchronization, and a modern Material 3 user interface.
+**Eqraa** is a premium, open-source reading application reimagined for modern Android devices. Built with a focus on immersive design, powerful synchronization, and privacy, Eqraa provides the ultimate reading experience for EPUB, PDF, and Audiobooks.
 
-## New in V.25
-- **Real-time Sync**: Seamlessly sync reading progress across devices using Supabase Realtime.
-- **Conflict Resolution**: Smart conflict detection and resolution when reading on multiple devices.
-- **Enhanced UI**: Polished Material 3 design with improved navigation and settings.
+## What's New in v3.0.0
 
-## Features
+### 🎨 Immersive & Premium UI
+- **Transparent Status Bar**: The app now draws content behind the system status bars for a true full-screen experience.
+- **Top-Only Navigation**: We've removed the bottom bar and consolidated controls into a sleek, top-aligned header.
+- **Smart Accessibility**: Tap the **Top 20%** of the screen to reveal controls; tap elsewhere to turn pages without distraction.
+- **Minimalist Aesthetic**: Strict Black & White theme for high contrast and focus.
 
-### ☁️ Cloud & Real-time Sync
-- **Supabase Integration**: Powered by Supabase for robust and fast data synchronization.
-- **Cross-Device Sync**: Your reading progress, highlights, and bookmarks are instantly available on all your devices.
-- **Offline Support**: Read offline and sync automatically when you're back online.
-- **Conflict Management**: intelligent handling of concurrent reading sessions.
+### ☁️ Next-Gen Sync (Powered by Supabase)
+- **Real-time Progress**: Switch between devices instantly. Your page, bookmark, and highlights sync in real-time.
+- **Cloud Library**: Upload your books to the cloud and access them anywhere.
+- **Settings Sync**: Your font choices, theme preferences (Sepia/Dark/Light), and text size travel with you.
+- **Conflict Resolution**: Smart handling of concurrent reading sessions across multiple devices.
 
 ### 🤖 AI Reading Companion
-- **Contextual Analysis**: Integrated with Groq AI to provide deep insights into the text.
-- **Plot Summaries**: Get real-time summaries of complex plot points.
-- **Character Insights**: Understand character motivations and relationships.
-- **Real-world Analogies**: Connect the story to real-world concepts for better understanding.
+- **Contextual Intelligence**: Select text to get instant summaries, character analysis, or historical context.
+- **Ask AI**: Chat with your book to uncover deeper meanings or clarify complex passages.
 
-### 🎨 Modern & Customizable UI
-- **Material 3 Design**: A stunning, modern interface built with Jetpack Compose.
-- **Unified Settings**: A comprehensive settings panel for customizing your reading experience.
-- **Theming**: Choose from Paper, Sepia, and Dark modes, or customize them to your liking.
-- **Typography**: Advanced control over Arabic fonts (Literata, Vazirmatn, etc.) and layout.
+### 📚 Comprehensive Format Support
+- **EPUB 3**: Full support for rich layout, media overlays, and interactivity.
+- **PDF**: Fast rendering with zoom and navigation tools.
+- **Audiobooks**: Listen to your books with variable playback speed and sleep timer.
+- **Readium LCP**: Support for DRM-protected library content.
 
-### 📚 Advanced Reading Tools
-- **Arabic Dictionary**: Built-in context-aware dictionary for instant definitions.
-- **Full Library Backup**: Securely backup your entire library and metadata to the cloud.
-- **Highlighting & Notes**: extensive highlighting and note-taking capabilities.
+## Technical Highlights
+- **Engine**: Built on the robust **Eqraa Toolkit** (formerly Readium Kotlin).
+- **Architecture**: Modern MVVM with Jetpack Compose UI.
+- **Privacy**: No tracking or analytics. Your library data belongs to you.
+
+## Installation
+Download the latest APK from the [Releases](https://github.com/mhmudxnasr/Eqraa/releases) page.
 
 ---
-*Built with ❤️ using the [Readium Kotlin Toolkit](https://github.com/readium/kotlin-toolkit).*
+*Developed by [Mahmud Nasr](https://github.com/mhmudxnasr). Licensed under BSD-3.*
