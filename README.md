@@ -24,7 +24,7 @@
 - **EPUB 3**: Full support for rich layout, media overlays, and interactivity.
 - **PDF**: Fast rendering with zoom and navigation tools.
 - **Audiobooks**: Listen to your books with variable playback speed and sleep timer.
-- **Readium LCP**: Support for DRM-protected library content.
+- **LCP**: Support for DRM-protected library content.
 
 ## Technical Highlights
 - **Engine**: Built on the robust **Eqraa Toolkit** (formerly Readium Kotlin).
