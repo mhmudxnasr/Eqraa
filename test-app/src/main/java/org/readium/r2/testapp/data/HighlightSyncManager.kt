@@ -59,7 +59,7 @@ class HighlightSyncManager(
         const val TYPE_HIGHLIGHT = "highlight"
     }
     
-    private val supabase = SupabaseService.client
+    private val supabase by lazy { SupabaseService.client }
     private val syncDao = AppDatabase.getDatabase(context).syncDao()
     private val database = AppDatabase.getDatabase(context)
     

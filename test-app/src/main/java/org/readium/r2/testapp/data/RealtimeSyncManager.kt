@@ -42,10 +42,9 @@ class RealtimeSyncManager(
     private val context: Context,
     private val scope: CoroutineScope
 ) {
-    private val supabase = SupabaseService.client
+    private val supabase by lazy { SupabaseService.client }
     
     // Channel references
-    private var readingProgressChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     private var preferencesChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     private var highlightsChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     
@@ -58,12 +57,14 @@ class RealtimeSyncManager(
     
     // Events
     sealed class RealtimeEvent {
+        /*
         data class ReadingProgressUpdated(
             val bookId: String,
             val cfi: String,
             val percentage: Float,
             val timestamp: Long
         ) : RealtimeEvent()
+        */
         
         data class PreferencesUpdated(
             val fontSize: Int?,
@@ -95,8 +96,8 @@ class RealtimeSyncManager(
             try {
                 Timber.d("RealtimeSyncManager: Starting realtime subscriptions...")
                 
-                // Subscribe to reading_progress table
-                subscribeToReadingProgress()
+                // Subscribe to reading_progress table (Moved to ReadingSyncManager)
+                // subscribeToReadingProgress()
                 
                 // Subscribe to user_preferences table
                 subscribeToPreferences()
@@ -121,7 +122,6 @@ class RealtimeSyncManager(
     fun stopListening() {
         scope.launch {
             try {
-                readingProgressChannel?.unsubscribe()
                 preferencesChannel?.unsubscribe()
                 highlightsChannel?.unsubscribe()
                 subscriptionJob?.cancel()
@@ -133,31 +133,6 @@ class RealtimeSyncManager(
         }
     }
     
-    private suspend fun subscribeToReadingProgress() {
-        try {
-            readingProgressChannel = supabase.realtime.channel("reading_progress_channel")
-            
-            val changeFlow = readingProgressChannel!!.postgresChangeFlow<PostgresAction>(
-                schema = "public"
-            ) {
-                table = "reading_progress"
-            }
-            
-            changeFlow.onEach { action ->
-                when (action) {
-                    is PostgresAction.Insert -> handleReadingProgressChange(action.record)
-                    is PostgresAction.Update -> handleReadingProgressChange(action.record)
-                    else -> { /* Ignore deletes for now */ }
-                }
-            }.launchIn(scope)
-            
-            readingProgressChannel!!.subscribe()
-            Timber.d("Subscribed to reading_progress")
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to subscribe to reading_progress")
-        }
-    }
     
     private suspend fun subscribeToPreferences() {
         try {
@@ -224,27 +199,11 @@ class RealtimeSyncManager(
         }
     }
     
+    /*
     private suspend fun handleReadingProgressChange(record: kotlinx.serialization.json.JsonObject) {
-        try {
-            val bookId = record["book_id"]?.jsonPrimitive?.content ?: return
-            val cfi = record["cfi"]?.jsonPrimitive?.content ?: return
-            val percentage = record["percentage"]?.jsonPrimitive?.content?.toFloatOrNull() ?: 0f
-            val timestamp = record["timestamp"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-            
-            Timber.d("Realtime: Reading progress updated for book $bookId")
-            
-            _events.emit(
-                RealtimeEvent.ReadingProgressUpdated(
-                    bookId = bookId,
-                    cfi = cfi,
-                    percentage = percentage,
-                    timestamp = timestamp
-                )
-            )
-        } catch (e: Exception) {
-            Timber.e(e, "Error parsing reading progress change")
-        }
+        ...
     }
+    */
     
     private suspend fun handlePreferencesChange(record: kotlinx.serialization.json.JsonObject) {
         try {

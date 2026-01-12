@@ -41,7 +41,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.readium.r2.testapp.data.BackupManager
-import org.readium.r2.testapp.data.ReadingProgressSyncManager
+import org.readium.r2.testapp.data.ReadingSyncManager
 import org.readium.r2.testapp.data.UserPreferencesSyncManager
 import org.readium.r2.testapp.data.model.SyncLogEntry
 import java.text.SimpleDateFormat
@@ -64,7 +64,7 @@ private val ProgressPurple = Color(0xFF8B5CF6)
 fun SyncSettingsScreen(
     backupManager: BackupManager?,
     syncManager: UserPreferencesSyncManager?,
-    readingSyncManager: ReadingProgressSyncManager?,
+    readingSync: ReadingSyncManager?,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -81,8 +81,8 @@ fun SyncSettingsScreen(
     var showLoginDialog by remember { mutableStateOf(false) }
 
     // Sync State observation
-    val syncState by readingSyncManager?.syncState?.collectAsState() ?: remember { mutableStateOf(ReadingProgressSyncManager.SyncState.Idle) }
-    
+    // val syncState by readingSyncManager?.syncState?.collectAsState() ... (Removed)
+
     // Recent Logs State
     val recentLogs by produceState<List<SyncLogEntry>>(initialValue = emptyList()) {
         val database = org.readium.r2.testapp.data.db.AppDatabase.getDatabase(context)
@@ -91,13 +91,8 @@ fun SyncSettingsScreen(
         }
     }
     
-    val isSyncing = syncState is ReadingProgressSyncManager.SyncState.Syncing
-    val lastSynced = remember(syncState) {
-        when (val state = syncState) {
-            is ReadingProgressSyncManager.SyncState.Success -> "Just now"
-            else -> "Synced recently"
-        }
-    }
+    val isSyncing = false // Simplified for now, or fetch from SyncStatusViewModel
+    val lastSynced = "Recently"
     
     // Fake Storage breakdown based on something "real-ish"
     // In a real app we'd fetch actual byte sizes from Supabase, 
@@ -116,7 +111,7 @@ fun SyncSettingsScreen(
                 showLoginDialog = false
                 scope.launch {
                     syncManager?.syncNow()
-                    readingSyncManager?.syncNow(org.readium.r2.testapp.data.db.AppDatabase.getDatabase(context).booksDao())
+                    // readingSync?.syncToSupabase(...) // No direct sync needed if debounced, but could fetch latest
                 }
             }
         )
@@ -179,7 +174,7 @@ fun SyncSettingsScreen(
                         scope.launch {
                             // Trigger all sync managers
                             syncManager?.syncNow()
-                            readingSyncManager?.syncNow(org.readium.r2.testapp.data.db.AppDatabase.getDatabase(context).booksDao())
+                            // readingSync?.syncUnsyncedItems()
                             backupManager?.performFullBackup()
                         }
                     }

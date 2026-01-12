@@ -38,6 +38,8 @@ abstract class BaseReaderFragment : Fragment() {
     protected val publication: Publication get() = model.publication
 
     protected abstract val navigator: Navigator
+    
+    val currentLocator: Locator get() = navigator.currentLocator.value
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +95,9 @@ abstract class BaseReaderFragment : Fragment() {
                             model.activityChannel.send(
                                 ReaderViewModel.ActivityCommand.OpenDrmManagementRequested
                             )
+                        }
+                        R.id.sync -> {
+                            model.checkRemoteProgress(showDialog = true)
                         }
                         else -> return false
                     }

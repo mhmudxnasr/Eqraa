@@ -12,6 +12,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/sync"
+        android:icon="@drawable/ic_baseline_refresh_24"
+        android:title="Check Sync"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/bookmark"
         android:icon="@drawable/ic_baseline_bookmark_24"
         android:title="@string/epubactivity_set_bookmark"

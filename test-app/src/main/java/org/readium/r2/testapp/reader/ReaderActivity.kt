@@ -29,9 +29,10 @@ import org.readium.r2.testapp.drm.DrmManagementFragment
 import org.readium.r2.testapp.outline.OutlineContract
 import org.readium.r2.testapp.outline.OutlineFragment
 import org.readium.r2.testapp.utils.launchWebBrowser
-import org.readium.r2.testapp.data.ReadingProgressSyncManager
-import org.readium.r2.testapp.data.model.ReadingPosition
 import timber.log.Timber
+import org.readium.r2.testapp.ui.sync.SyncStatusViewModel
+import org.readium.r2.testapp.ui.sync.ConflictResolutionDialog
+import org.readium.r2.testapp.data.auth.AuthRepository
 
 /*
  * An activity to read a publication
@@ -41,6 +42,17 @@ import timber.log.Timber
 open class ReaderActivity : AppCompatActivity() {
 
     private val model: ReaderViewModel by viewModels()
+    private val app: Application get() = application as Application
+
+    private val syncViewModel: SyncStatusViewModel by viewModels {
+        SyncStatusViewModel.Factory(
+            applicationContext,
+            app.cloudLibraryManager,
+            app.realtimeSyncManager,
+            app.readingSyncManager,
+            AuthRepository()
+        )
+    }
 
     override val defaultViewModelProviderFactory: ViewModelProvider.Factory
         get() = ReaderViewModel.createFactory(
@@ -53,7 +65,6 @@ open class ReaderActivity : AppCompatActivity() {
     
     // Session tracking
     private var sessionStartTime: Long = 0L
-    private val app: Application get() = application as Application
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,6 +116,24 @@ open class ReaderActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
+
+        // Observe conflicts and show dialog
+        lifecycleScope.launch {
+            syncViewModel.conflicts.collect { conflicts ->
+                conflicts.firstOrNull()?.let { conflict ->
+                    ConflictResolutionDialog(
+                        context = this@ReaderActivity,
+                        conflict = conflict,
+                        onKeepLocal = { 
+                            syncViewModel.resolveConflict(conflict, keepLocal = true)
+                        },
+                        onKeepCloud = { 
+                            syncViewModel.resolveConflict(conflict, keepLocal = false)
+                        }
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun createReaderFragment(readerData: ReaderInitData): BaseReaderFragment? {
@@ -134,60 +163,15 @@ open class ReaderActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
-        // Fetch latest position from server on resume (cross-device sync)
-        lifecycleScope.launch {
-            try {
-                val syncManager = (application as Application).readingProgressSyncManager ?: return@launch
-                val bookId = model.bookId
-                val book = app.bookRepository.get(bookId) ?: return@launch
-                val bookIdentifier = book.identifier
-                
-                val serverPosition = syncManager.getServerPosition(bookIdentifier)
-                if (serverPosition != null) {
-                    val localTimestamp = syncManager.getLastSyncTimestamp(bookIdentifier)
-                    // If server is newer than our last sync time OR local recorded time
-                    val bookProgressionTimestamp = 0L // Could extend Book model later, for now last sync is enough
-                    
-                    if (serverPosition.timestamp > localTimestamp) {
-                        Timber.d("Newer server position found: ${serverPosition.cfi} at ${serverPosition.timestamp} (local: $localTimestamp)")
-                        showSyncProgressDialog(serverPosition)
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to fetch server position on resume")
-            }
-        }
+        // Check for remote changes on resume
+        model.checkRemoteProgress()
     }
 
-    private fun showSyncProgressDialog(serverPosition: org.readium.r2.testapp.data.model.ReadingPosition) {
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.sync_progress_title)
-            .setMessage(R.string.sync_progress_message)
-            .setPositiveButton(R.string.yes) { _, _ ->
-                try {
-                    val locator = Locator.fromJSON(org.json.JSONObject(serverPosition.cfi))
-                    if (locator != null) {
-                        readerFragment.go(locator, animated = true)
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to parse server locator")
-                }
-            }
-            .setNegativeButton(R.string.no, null)
-            .show()
-    }
-    
     override fun onPause() {
         super.onPause()
-        // Force immediate sync when app goes to background (skip 30s debounce)
-        lifecycleScope.launch {
-            try {
-                (application as Application).readingProgressSyncManager?.forceSyncNow()
-                Timber.d("Forced sync on app pause")
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to force sync on pause")
-            }
-        }
+        // Determine if we need to sync:
+        // The Repository queues actions, but triggering the worker explicitly ensures an immediate attempt
+        org.readium.r2.testapp.data.SyncWorker.enqueue(applicationContext)
     }
     
     override fun onStop() {
@@ -236,7 +220,66 @@ open class ReaderActivity : AppCompatActivity() {
                 launchWebBrowser(this, command.url.toUri())
             is ReaderViewModel.ActivityCommand.ToastError ->
                 command.error.show(this)
+            is ReaderViewModel.ActivityCommand.SyncDetected ->
+                showSyncPrompt(command.cfi, command.percentage)
+            is ReaderViewModel.ActivityCommand.ShowConflictDialog ->
+                showConflictDialog(command.local, command.remote)
         }
+    }
+
+    private fun showConflictDialog(local: org.readium.r2.testapp.data.model.ReadingPosition?, remote: org.readium.r2.testapp.data.model.ReadingPosition) {
+        val dialog = ConflictResolutionDialogFragment.newInstance(local, remote)
+        dialog.setListener(object : ConflictResolutionDialogFragment.ConflictResolutionListener {
+            override fun onKeepLocal() {
+                model.forceLocalProgress()
+            }
+
+            override fun onJumpToSynced(targetPosition: org.readium.r2.testapp.data.model.ReadingPosition) {
+                // 1. Update DB
+                model.applyRemoteProgress(targetPosition)
+                
+                // 2. Navigate
+                try {
+                     val locator = Locator.fromJSON(org.json.JSONObject(targetPosition.cfi))
+                     if (locator != null) {
+                         readerFragment.go(locator, animated = true)
+                     }
+                } catch (e: Exception) {
+                     Timber.e(e, "Failed to navigate to synced position")
+                }
+            }
+        })
+        dialog.show(supportFragmentManager, ConflictResolutionDialogFragment.TAG)
+    }
+
+    private fun showSyncPrompt(cfi: String, percentage: Float) {
+        val newPercent = (percentage * 100).toInt()
+        
+        // Get current local progress
+        val currentPercent = try {
+            val locator = readerFragment.currentLocator
+            ((locator.locations.totalProgression ?: 0.0) * 100).toInt()
+        } catch (e: Exception) {
+            0
+        }
+
+        val message = getString(R.string.sync_progress_message)
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.sync_progress_title)
+            .setMessage("$message\n\nCurrent: $currentPercent%\nNew: $newPercent%")
+            .setPositiveButton("Jump") { _, _ ->
+                try {
+                    val locator = Locator.fromJSON(org.json.JSONObject(cfi))
+                    if (locator != null) {
+                        readerFragment.go(locator, animated = true)
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to parse sync locator")
+                }
+            }
+            .setNegativeButton("Stay here", null)
+            .show()
     }
 
     private fun showOutlineFragment() {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import io.github.jan.supabase.postgrest.from
+import org.readium.r2.testapp.Application
 import org.readium.r2.testapp.data.model.NoteDto
 import org.readium.r2.testapp.data.model.ReadingProgressDto
 import org.readium.r2.testapp.data.model.UserPreferencesDto
@@ -26,7 +27,7 @@ class BackupManager(
     private val statsDao: StatsDao,
     private val scope: CoroutineScope
 ) {
-    private val supabase = SupabaseService.client
+    private val supabase by lazy { SupabaseService.client }
     
     sealed class SyncState {
         object Idle : SyncState()
@@ -59,13 +60,15 @@ class BackupManager(
                             val json = org.json.JSONObject(progression)
                             val userId = supabase.auth.currentSessionOrNull()?.user?.id 
                                 ?: throw IllegalStateException("User must be logged in for backup")
+                            val deviceId = (context.applicationContext as Application).readingSyncManager.deviceId
                                 
                             val progressDto = ReadingProgressDto(
                                 userId = userId,
                                 bookId = book.identifier,
-                                cfi = json.optString("locator"),
+                                cfi = org.readium.r2.testapp.utils.CFICompressor.compress(progression),
                                 percentage = json.optDouble("progression", 0.0).toFloat(),
-                                timestamp = System.currentTimeMillis()
+                                updatedAt = System.currentTimeMillis(),
+                                deviceId = deviceId
                             )
                             readingProgressMap[book.identifier] = progressDto
                             
@@ -146,7 +149,10 @@ class BackupManager(
                 
                 // 3. Notes
                 if (allNotes.isNotEmpty()) {
-                    supabase.from("notes").upsert(allNotes) { select() }
+                    supabase.from("notes").upsert(allNotes) {
+                         onConflict = "user_id, book_id, cfi"
+                         select()
+                    }
                 }
                 
                 Timber.d("Backup/Sync completed for Settings, Progress (${readingProgressMap.size}), and Notes (${allNotes.size})")
@@ -186,14 +192,17 @@ class BackupManager(
                         val json = JSONObject(progression)
                         val userId = supabase.auth.currentSessionOrNull()?.user?.id 
                             ?: throw IllegalStateException("User must be logged in for backup")
+                        val deviceId = (context.applicationContext as Application).readingSyncManager.deviceId
 
-                        val progressDto = ReadingProgressDto(
-                            userId = userId,
-                            bookId = book.identifier,
-                            cfi = json.optString("locator"),
-                            percentage = json.optDouble("progression", 0.0).toFloat(),
-                            timestamp = System.currentTimeMillis()
-                        )
+                            val progressDto = ReadingProgressDto(
+                                userId = userId,
+                                bookId = book.identifier,
+                                cfi = org.readium.r2.testapp.utils.CFICompressor.compress(progression),
+                                percentage = json.optDouble("progression", 0.0).toFloat(),
+                                updatedAt = System.currentTimeMillis(),
+                                deviceId = deviceId
+                            )
+                        Timber.d("Syncing progress for $bookIdentifier: ${progressDto.percentage}%")
                         supabase.from("reading_progress").upsert(progressDto) { select() }
                         Timber.d("Progress synced for $bookIdentifier")
                     } catch (e: Exception) {
@@ -219,7 +228,10 @@ class BackupManager(
                         )
                     }
                     if (notes.isNotEmpty()) {
-                        supabase.from("notes").upsert(notes) { select() }
+                        supabase.from("notes").upsert(notes) { 
+                            onConflict = "user_id, book_id, cfi"
+                            select() 
+                        }
                         Timber.d("Notes synced for $bookIdentifier: ${notes.size} items")
                     }
                 } catch (e: Exception) {

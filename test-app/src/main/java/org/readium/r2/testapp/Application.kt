@@ -29,6 +29,8 @@ import io.github.jan.supabase.auth.auth
 // import org.readium.r2.testapp.data.AuthManager (Removed)
 // import org.readium.r2.testapp.data.FirestoreSyncManager (Removed)
 import org.readium.r2.testapp.data.ReadingProgressSyncManager
+import org.readium.r2.testapp.data.ReadingProgressRepository
+import org.readium.r2.testapp.data.ReadingSyncManager
 import org.readium.r2.testapp.data.BackupManager
 import org.readium.r2.testapp.data.CloudLibraryManager
 import org.readium.r2.testapp.data.UserPreferencesSyncManager
@@ -71,6 +73,12 @@ class Application : android.app.Application() {
         private set
 
     var readingProgressSyncManager: ReadingProgressSyncManager? = null
+        private set
+
+    lateinit var readingProgressRepository: ReadingProgressRepository
+        private set
+
+    lateinit var readingSyncManager: ReadingSyncManager
         private set
 
     var backupManager: BackupManager? = null
@@ -149,33 +157,36 @@ class Application : android.app.Application() {
         SupabaseService.initialize(this)
 
         // Sync Initialization (Custom Backend)
-        coroutineScope.launch {
-            try {
-                // Hardcoded user for "Single User: Mahmud" scenario (Legacy/Local usage)
-                val userId = "mahmud"
-                
-                readingProgressSyncManager = ReadingProgressSyncManager(userId)
-                readingProgressSyncManager?.initialize(this@Application, coroutineScope, database.booksDao())
-                
-                statsRepository.initialize(userId, coroutineScope)
-                
-                // Initialize Backup Manager
-                backupManager = BackupManager(this@Application, database.booksDao(), database.statsDao(), coroutineScope)
-                bookRepository.backupManager = backupManager
-                
-                // Initialize Cloud Library Manager
-                cloudLibraryManager = CloudLibraryManager(this@Application, coroutineScope, storageDir)
-                
-                // Initialize User Preferences Sync Manager
-                userPreferencesSyncManager = UserPreferencesSyncManager(this@Application)
+        try {
+            // Hardcoded user for "Single User: Mahmud" scenario (Legacy/Local usage)
+            val userId = "mahmud"
+            
+            // Initialize Managers Synchronously (Avoid race conditions with UI)
+            cloudLibraryManager = CloudLibraryManager(this@Application, coroutineScope, storageDir)
+            
+            readingProgressRepository = ReadingProgressRepository(
+                booksDao = database.booksDao(),
+                syncDao = database.syncDao(),
+                context = this@Application
+            )
+            
+            readingSyncManager = ReadingSyncManager(
+                supabase = SupabaseService.client,
+                context = this@Application,
+                scope = coroutineScope
+            )
+            
+            userPreferencesSyncManager = UserPreferencesSyncManager(this@Application)
 
-                // Initialize Realtime Sync Manager
-                realtimeSyncManager = RealtimeSyncManager(this@Application, coroutineScope)
-                
-                // Initialize Highlight Sync Manager
-                highlightSyncManager = HighlightSyncManager(this@Application, coroutineScope)
-                bookRepository.highlightSyncManager = highlightSyncManager
+            realtimeSyncManager = RealtimeSyncManager(this@Application, coroutineScope)
+            
+            highlightSyncManager = HighlightSyncManager(this@Application, coroutineScope)
+            bookRepository.highlightSyncManager = highlightSyncManager
 
+            Timber.d("Sync managers initialized for user: $userId")
+
+            // Start Sync Logic Asynchronously
+            coroutineScope.launch {
                 // Check for valid session before syncing to avoid 401 errors
                 val session = SupabaseService.client.auth.currentSessionOrNull()
                 if (session != null) {
@@ -183,16 +194,15 @@ class Application : android.app.Application() {
                     cloudLibraryManager?.fetchCloudLibrary()
                     userPreferencesSyncManager?.startSync(coroutineScope)
                     realtimeSyncManager?.startListening() // Start listening to realtime changes
+                    readingSyncManager.startRealtimeSync() // Start reading progress realtime sync
                     scheduleBackgroundSync()
                 } else {
                      Timber.w("Sync skipped: User not logged in. Please sign in via Settings.")
                 }
-
-                Timber.d("Sync managers initialized for user: $userId")
-                
-            } catch (e: Exception) {
-                Timber.e(e, "Sync init failed")
             }
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Sync init failed")
         }
     }
 

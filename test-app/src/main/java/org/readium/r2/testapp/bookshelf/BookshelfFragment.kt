@@ -155,9 +155,10 @@ class BookshelfFragment : Fragment() {
         // Initialize SyncStatusViewModel
         val factory = SyncStatusViewModel.Factory(
             requireContext(),
-            app.readingProgressSyncManager,
+            // app.readingProgressSyncManager (Removed)
             app.cloudLibraryManager,
             app.realtimeSyncManager,
+            app.readingSyncManager,
             AuthRepository() // Or get from App if singleton
         )
         syncStatusViewModel = androidx.lifecycle.ViewModelProvider(this, factory)[SyncStatusViewModel::class.java]
@@ -171,20 +172,18 @@ class BookshelfFragment : Fragment() {
             }
         }
 
-        // Observe Conflicts
+        // Observe Conflicts (Removed - Handled automatically)
+        /*
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 syncStatusViewModel.conflicts.collectLatest { conflicts ->
                     if (conflicts.isNotEmpty()) {
-                        // Show dialog for the first conflict
-                        // Note: In a real app, we might want to ensure we don't stack dialogs 
-                        // or show them while user is doing something else.
-                        // Ideally we'd have a queue. For now, picking the first one.
                         showConflictDialog(conflicts.first())
                     }
                 }
             }
         }
+        */
 
         binding.bookshelfAddBookFab.setOnClickListener {
             var selected = 0
@@ -213,9 +212,8 @@ class BookshelfFragment : Fragment() {
                     // Trigger sync for all components
                     val jobs = listOf(
                         launch { 
-                            org.readium.r2.testapp.data.db.AppDatabase.getDatabase(requireContext()).booksDao().let { dao ->
-                                app.readingProgressSyncManager?.syncNow(dao) 
-                            }
+                            // Trigger Worker for reading progress and other queued items
+                            org.readium.r2.testapp.data.SyncWorker.enqueue(requireContext())
                         },
                         launch { app.cloudLibraryManager?.fetchCloudLibrary() },
                         launch { app.userPreferencesSyncManager?.syncNow() }
@@ -678,17 +676,19 @@ class BookshelfFragment : Fragment() {
             }
         }
     }
+    /*
     private fun showConflictDialog(conflict: SyncConflict) {
         val dialog = ConflictResolutionDialog(
             context = requireContext(),
             conflict = conflict,
             onKeepLocal = {
-                app.readingProgressSyncManager?.resolveConflict(conflict, keepLocal = true)
+               // app.readingProgressSyncManager?.resolveConflict(conflict, keepLocal = true)
             },
             onKeepCloud = {
-                app.readingProgressSyncManager?.resolveConflict(conflict, keepLocal = false)
+               // app.readingProgressSyncManager?.resolveConflict(conflict, keepLocal = false)
             }
         )
         dialog.show()
     }
+    */
 }

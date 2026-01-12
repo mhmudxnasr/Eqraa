@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.readium.r2.testapp.data.CloudLibraryManager
-import org.readium.r2.testapp.data.ReadingProgressSyncManager
+import org.readium.r2.testapp.data.ReadingSyncManager
 import org.readium.r2.testapp.data.RealtimeSyncManager
 import org.readium.r2.testapp.data.SyncWorker
 import org.readium.r2.testapp.data.model.SyncConflict
@@ -20,9 +20,10 @@ import org.readium.r2.testapp.utils.NetworkMonitor
  */
 class SyncStatusViewModel(
     private val context: Context,
-    private val readingSync: ReadingProgressSyncManager?,
+    // private val readingSync: ReadingProgressSyncManager? (Removed)
     private val cloudLibrary: CloudLibraryManager?,
     private val realtimeSync: RealtimeSyncManager?,
+    private val readingSync: ReadingSyncManager?,
     private val auth: AuthRepository
 ) : ViewModel() {
 
@@ -36,8 +37,9 @@ class SyncStatusViewModel(
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Idle)
     val status: StateFlow<SyncStatus> = _status.asStateFlow()
 
-    // Conflicts
-    val conflicts: StateFlow<List<SyncConflict>> = readingSync?.conflicts ?: MutableStateFlow(emptyList())
+    // FIX: Make this mutable and actually populate it
+    private val _conflicts = MutableStateFlow<List<SyncConflict>>(emptyList())
+    val conflicts: StateFlow<List<SyncConflict>> = _conflicts.asStateFlow()
 
     // Realtime events for toasts
     private val _toastMessage = MutableSharedFlow<String>()
@@ -55,6 +57,49 @@ class SyncStatusViewModel(
         combineStates()
         observeRealtimeEvents()
         observeNetwork()
+        observeConflicts()
+    }
+
+    // ADD: Observe conflicts from ReadingSyncManager
+    private fun observeConflicts() {
+        readingSync?.let { syncManager ->
+            viewModelScope.launch {
+                syncManager.detectConflicts().collect { conflictsList ->
+                    _conflicts.value = conflictsList
+                }
+            }
+        }
+    }
+
+    // ADD: Handle conflict resolution
+    fun resolveConflict(conflict: SyncConflict, keepLocal: Boolean) {
+        viewModelScope.launch {
+            try {
+                if (keepLocal) {
+                    // Push local position to cloud, overwriting remote
+                    readingSync?.forceUploadPosition(
+                        bookId = conflict.bookId,
+                        position = conflict.localPosition
+                    )
+                    _toastMessage.emit("Kept local version")
+                } else {
+                    // Accept remote position, overwriting local
+                    readingSync?.forceDownloadPosition(
+                        bookId = conflict.bookId,
+                        position = conflict.remotePosition
+                    )
+                    _toastMessage.emit("Kept cloud version")
+                }
+                
+                // Remove resolved conflict from list
+                _conflicts.value = _conflicts.value.filterNot { 
+                    it.bookId == conflict.bookId 
+                }
+                
+            } catch (e: Exception) {
+                _toastMessage.emit("Failed to resolve conflict: ${e.message}")
+            }
+        }
     }
 
     private fun combineStates() {
@@ -65,12 +110,13 @@ class SyncStatusViewModel(
         }.launchIn(viewModelScope)
 
         // Combine Sync States
-        val readingFlow = readingSync?.syncState ?: flowOf(ReadingProgressSyncManager.SyncState.Idle)
+        // Combine Sync States
+        // val readingFlow = readingSync?.syncState ?: flowOf(ReadingProgressSyncManager.SyncState.Idle) (Removed)
         val uploadingFlow = cloudLibrary?.isUploading ?: flowOf(false)
         val downloadingFlow = cloudLibrary?.isDownloading ?: flowOf(false)
         val networkFlow = networkMonitor.isOnline
 
-        combine(readingFlow, uploadingFlow, downloadingFlow, networkFlow, _pendingCount) { reading, upload, download, online, pending ->
+        combine(uploadingFlow, downloadingFlow, networkFlow, _pendingCount) { upload, download, online, pending ->
             when {
                 !online -> {
                     _status.value = SyncStatus.Offline
@@ -88,36 +134,14 @@ class SyncStatusViewModel(
                         lastSyncTime = _lastSyncTime.value
                     )
                 }
-                reading is ReadingProgressSyncManager.SyncState.Syncing -> {
-                    _status.value = SyncStatus.Syncing("Reading Progress")
+                // Removed specific ReadingProgressSyncManager states
+                // reading is ReadingProgressSyncManager.SyncState.Syncing -> ...
+                
+                pending > 0 -> {
+                    _status.value = SyncStatus.Syncing("Pushing changes...")
                     SyncStatusInfo(
                         state = SyncStatusInfo.State.SYNCING,
-                        message = "Syncing progress...",
-                        lastSyncTime = _lastSyncTime.value
-                    )
-                }
-                reading is ReadingProgressSyncManager.SyncState.Error -> {
-                    _status.value = SyncStatus.Error(reading.message)
-                    SyncStatusInfo(
-                        state = SyncStatusInfo.State.ERROR,
-                        message = reading.message,
-                        pendingCount = pending,
-                        lastSyncTime = _lastSyncTime.value
-                    )
-                }
-                reading is ReadingProgressSyncManager.SyncState.Success -> {
-                    _lastSyncTime.value = reading.timestamp
-                    _status.value = SyncStatus.Idle
-                    SyncStatusInfo(
-                        state = if (pending > 0) SyncStatusInfo.State.PENDING else SyncStatusInfo.State.SYNCED,
-                        pendingCount = pending,
-                        lastSyncTime = reading.timestamp
-                    )
-                }
-                pending > 0 -> {
-                    _status.value = SyncStatus.Idle
-                    SyncStatusInfo(
-                        state = SyncStatusInfo.State.PENDING,
+                        message = "Syncing...",
                         pendingCount = pending,
                         lastSyncTime = _lastSyncTime.value
                     )
@@ -136,11 +160,9 @@ class SyncStatusViewModel(
     }
 
     private fun observeRealtimeEvents() {
+        // Observe global realtime events
         realtimeSync?.events?.onEach { event ->
             when (event) {
-                is RealtimeSyncManager.RealtimeEvent.ReadingProgressUpdated -> {
-                    _toastMessage.emit("Reading position updated from another device")
-                }
                 is RealtimeSyncManager.RealtimeEvent.PreferencesUpdated -> {
                     _toastMessage.emit("Preferences synced from another device")
                 }
@@ -150,7 +172,13 @@ class SyncStatusViewModel(
                 is RealtimeSyncManager.RealtimeEvent.Error -> {
                     // Don't show error toasts, just log
                 }
+                else -> {}
             }
+        }?.launchIn(viewModelScope)
+
+        // Observe reading progress updates specifically
+        readingSync?.remoteProgressFlow?.onEach { progress ->
+            _toastMessage.emit("Reading position updated for ${progress.bookId}")
         }?.launchIn(viewModelScope)
     }
 
@@ -191,13 +219,14 @@ class SyncStatusViewModel(
 
     class Factory(
         private val context: Context,
-        private val readingSync: ReadingProgressSyncManager?,
+        // private val readingSync: ReadingProgressSyncManager?,
         private val cloudLibrary: CloudLibraryManager?,
         private val realtimeSync: RealtimeSyncManager?,
+        private val readingSync: ReadingSyncManager?,
         private val auth: AuthRepository
     ) : ViewModelProvider.NewInstanceFactory() {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SyncStatusViewModel(context, readingSync, cloudLibrary, realtimeSync, auth) as T
+            return SyncStatusViewModel(context, cloudLibrary, realtimeSync, readingSync, auth) as T
         }
     }
 }

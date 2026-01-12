@@ -30,5 +30,8 @@ data class ReadingPosition(
     val bookId: String,
     val cfi: String,
     val percentage: Float = 0f,
-    val timestamp: Long = System.currentTimeMillis()
-)
+    val timestamp: Long = System.currentTimeMillis(),
+    val deviceId: String? = null,
+    val pageNumber: Int? = null,
+    val totalPages: Int? = null
+) : java.io.Serializable

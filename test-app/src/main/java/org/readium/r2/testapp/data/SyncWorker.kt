@@ -12,10 +12,13 @@ import org.readium.r2.testapp.data.model.SyncAction
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.json.Json
 import org.readium.r2.testapp.data.SupabaseService
 import org.readium.r2.testapp.data.HighlightDto
 import org.readium.r2.testapp.data.model.BookmarkDto
+import org.readium.r2.testapp.data.model.UpsertProgressParams
 
 /**
  * Background worker for syncing data to Supabase.
@@ -35,7 +38,7 @@ class SyncWorker(
     params: WorkerParameters
 ) : CoroutineWorker(appContext, params) {
 
-    private val supabase = SupabaseService.client
+    private val supabase by lazy { SupabaseService.client }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
@@ -84,8 +87,21 @@ class SyncWorker(
         return when (action.type) {
             SyncAction.TYPE_POSITION -> {
                 val dto = Json.decodeFromString<ReadingProgressDto>(action.payload)
-                supabase.from("reading_progress").upsert(dto) { select() }
-                Timber.d("SyncWorker: Synced reading progress for ${dto.bookId}")
+                val params = UpsertProgressParams(
+                    bookId = dto.bookId,
+                    cfi = dto.cfi,
+                    percentage = dto.percentage,
+                    deviceId = dto.deviceId,
+                    updatedAt = dto.updatedAt,
+                    pageNumber = dto.pageNumber,
+                    chapterId = dto.chapterId
+                )
+                val response = supabase.postgrest.rpc("upsert_reading_progress", params).decodeAs<org.readium.r2.testapp.data.model.SyncResponseDto>()
+                if (response.updated) {
+                    Timber.d("SyncWorker: Synced reading progress for ${dto.bookId} via RPC")
+                } else {
+                    Timber.i("SyncWorker: Skipped progress for ${dto.bookId} (Conflict/Hot Window)")
+                }
                 true
             }
             SyncAction.TYPE_PREFERENCE -> {

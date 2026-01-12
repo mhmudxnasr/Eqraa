@@ -5,11 +5,37 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ReadingProgressDto(
-    @SerialName("user_id") val userId: String,
+    @SerialName("id") val id: String? = null,
+    @SerialName("user_id") val userId: String? = null,
     @SerialName("book_id") val bookId: String,
     @SerialName("cfi") val cfi: String,
     @SerialName("percentage") val percentage: Float,
-    @SerialName("timestamp") val timestamp: Long
+    @SerialName("page_number") val pageNumber: Int? = null,
+    @SerialName("chapter_id") val chapterId: String? = null,
+    @SerialName("updated_at") val updatedAt: Long,          // Millisecond timestamp
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("device_id") val deviceId: String,
+    @SerialName("sync_version") val syncVersion: Int = 1,
+    @SerialName("last_opened_at") val lastOpenedAt: Long? = null,
+    @SerialName("server_synced_at") val serverSyncedAt: String? = null
+)
+
+@Serializable
+data class UpsertProgressParams(
+    @SerialName("p_book_id") val bookId: String,
+    @SerialName("p_cfi") val cfi: String?,
+    @SerialName("p_percentage") val percentage: Float,
+    @SerialName("p_device_id") val deviceId: String,
+    @SerialName("p_updated_at") val updatedAt: Long,
+    @SerialName("p_page_number") val pageNumber: Int? = null,
+    @SerialName("p_chapter_id") val chapterId: String? = null
+)
+
+@Serializable
+data class SyncResponseDto(
+    @SerialName("updated") val updated: Boolean,
+    @SerialName("conflict") val conflict: Boolean,
+    @SerialName("data") val data: ReadingProgressDto
 )
 
 @Serializable
@@ -57,11 +83,13 @@ data class BookmarkDto(
 @Serializable
 data class CloudBookDto(
     @SerialName("id") val id: String, // Supabase UUID or String ID
+    @SerialName("user_id") val userId: String,
     @SerialName("identifier") val identifier: String,
     @SerialName("title") val title: String,
     @SerialName("author") val author: String,
     @SerialName("filename") val filename: String,
     @SerialName("stored_filename") val storedFilename: String,
     @SerialName("media_type") val mediaType: String? = null,
-    @SerialName("url") val url: String? = null // For direct download if needed
+    @SerialName("url") val url: String? = null, // For direct download if needed
+    @SerialName("checksum") val checksum: String? = null // SHA-256 hash for integrity check
 )

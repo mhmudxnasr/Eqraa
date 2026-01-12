@@ -62,7 +62,8 @@ import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -141,7 +142,8 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
     private var activeOverlay by mutableStateOf<ActiveOverlay>(ActiveOverlay.None)
     private var selectedTextForOverlay by mutableStateOf("")
     
-    // Edit Mode State
+    // UI State
+    private var isSystemUiVisible by mutableStateOf(true)
     private var isEditMode by mutableStateOf(false)
     private val highlighterState = HighlighterState()
 
@@ -164,6 +166,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         (navigator as VisualNavigator).apply {
             addInputListener(object : InputListener {
                 override fun onTap(event: TapEvent): Boolean {
+                    isSystemUiVisible = !isSystemUiVisible
                     requireActivity().toggleSystemUi()
                     return true
                 }
@@ -263,7 +266,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                         backgroundColor = if (isEditMode) androidx.compose.ui.graphics.Color(0xFF007AFF) else androidx.compose.ui.graphics.Color.White
                     ) {
                         Icon(
-                            imageVector = if (isEditMode) Icons.Default.Edit else Icons.Default.MenuBook,
+                            imageVector = if (isEditMode) Icons.Default.Edit else Icons.AutoMirrored.Filled.MenuBook,
                             contentDescription = if (isEditMode) "Edit Mode" else "Read Mode",
                             tint = if (isEditMode) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Black
                         )
@@ -418,7 +421,16 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                 onExplainSymbolism = { /* TODO: Implement symbolism explanation */ },
                 onAskQuestion = { question -> /* TODO: Process AI question */ }
             )
-            ActiveOverlay.None -> {}
+            ActiveOverlay.None -> {
+                if (isSystemUiVisible && !isEditMode) {
+                    ReaderNavbar(
+                        model = model,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 60.dp) // Offset above system bars/fab
+                    )
+                }
+            }
         }
     }
 
@@ -522,7 +534,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                     when (state) {
                         is BackupManager.SyncState.Syncing -> {
                             currentSnackbar = Snackbar.make(binding.root, "Syncing data to cloud...", Snackbar.LENGTH_INDEFINITE)
-                            currentSnackbar?.show()
+                            currentSnackbar.show()
                         }
                         is BackupManager.SyncState.Success -> {
                             Snackbar.make(binding.root, "Sync successful", Snackbar.LENGTH_SHORT).show()

@@ -33,6 +33,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
+import java.security.MessageDigest
 
 /**
  * Manager class for cloud library operations.
@@ -46,9 +47,21 @@ class CloudLibraryManager(
     companion object {
         private const val AUTH_TOKEN = SyncConfig.AUTH_TOKEN
         // private const val BASE_URL = SyncConfig.SYNC_SERVER_URL // Unused
+        
+        private fun calculateChecksum(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { fis ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (fis.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
     }
 
-    private val supabase = SupabaseService.client
+    private val supabase by lazy { SupabaseService.client }
     private val bookBucket = supabase.storage.from("books")
 
 
@@ -102,12 +115,11 @@ class CloudLibraryManager(
 
             Timber.d("Starting upload: ${file.name} (${file.length()} bytes)")
 
-            val filename = "${identifier}/${file.name}" // Store under identifier folder? Or just uuid
-            // Using a simpler path structure: "user_id/identifier.epub" ?
-            // Supabase auth user is implicit. RLS handles isolation.
-            // Let's use "identifier_filename" or just "filename" if unique locally.
-            // Identifier is safer.
-            val storagePath = "$identifier/${file.name}"
+            val userId = supabase.auth.currentUserOrNull()?.id 
+                ?: throw IllegalStateException("User not authenticated for upload")
+            
+            // Store under "userId/identifier/filename" to strictly isolate user data and avoid RLS conflicts
+            val storagePath = "$userId/$identifier/${file.name}"
 
             // 1. Upload to Storage
             bookBucket.upload(storagePath, file.readBytes()) {
@@ -115,15 +127,21 @@ class CloudLibraryManager(
             }
             _uploadProgress.value = 0.5f
 
+            // Calculate checksum for integrity
+            val checksum = calculateChecksum(file)
+            Timber.d("Calculated checksum for upload: $checksum")
+
             // 2. Insert Metadata to DB
             val bookDto = CloudBookDto(
                 id = java.util.UUID.randomUUID().toString(),
+                userId = userId,
                 identifier = identifier,
                 title = title,
                 author = author,
                 filename = file.name, // Original name for display/download
                 storedFilename = storagePath, // Path in bucket
-                mediaType = mediaType
+                mediaType = mediaType,
+                checksum = checksum
             )
             
             // Upsert metadata
@@ -208,6 +226,16 @@ class CloudLibraryManager(
             val targetFile = File(storageDir, localFilename)
             targetFile.writeBytes(bytes)
             
+            // Verify integrity
+            book.checksum?.let { expectedChecksum ->
+                val actualChecksum = calculateChecksum(targetFile)
+                if (expectedChecksum != actualChecksum) {
+                    targetFile.delete()
+                    throw Exception("Integrity check failed! Expected: $expectedChecksum, Actual: $actualChecksum")
+                }
+                Timber.d("Integrity check passed: $actualChecksum")
+            }
+            
             _downloadProgress.value = 1f
             Timber.d("Download successful: ${targetFile.absolutePath}")
             Result.success(targetFile)
@@ -230,7 +258,6 @@ class CloudLibraryManager(
      */
     suspend fun fetchCloudLibrary(): Result<List<CloudBookDto>> = withContext(Dispatchers.IO) {
         try {
-            Timber.d("Fetching cloud library...")
             Timber.d("Fetching cloud library...")
             val books = supabase.from("cloud_books").select().decodeList<CloudBookDto>()
             

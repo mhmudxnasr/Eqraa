@@ -216,8 +216,8 @@
 
     <string name="info">Information</string>
     <string name="search_hint">Search</string>
-    <string name="sync_progress_title">Sync Progress?</string>
-    <string name="sync_progress_message">A newer reading position was found in the cloud. Do you want to sync to it?</string>
+    <string name="sync_progress_title">Sync Update</string>
+    <string name="sync_progress_message">You have read further on another device.</string>
     <string name="yes">Yes</string>
     <string name="no">No</string>
 
@@ -237,4 +237,7 @@
     <string name="upload_all_books">Upload All Books</string>
     <string name="book_already_in_cloud">Book already in cloud</string>
     <string name="delete_from_cloud">Delete from Cloud</string>
+    <string name="conflict_message">Reading progress found from another device</string>
+    <string name="conflict_title">Sync Conflict</string>
+    <string name="offline_mode_message">Offline mode - progress will sync when connected</string>
 </resources>

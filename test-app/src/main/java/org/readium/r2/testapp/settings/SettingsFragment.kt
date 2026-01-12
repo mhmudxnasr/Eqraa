@@ -40,6 +40,7 @@ import androidx.fragment.app.Fragment
 import kotlinx.coroutines.launch
 import org.readium.r2.testapp.Application
 import org.readium.r2.testapp.data.BackupManager
+import org.readium.r2.testapp.data.ReadingSyncManager
 import org.readium.r2.testapp.data.UserPreferencesSyncManager
 import org.readium.r2.testapp.data.db.AppDatabase
 import android.os.Environment
@@ -83,7 +84,7 @@ fun SettingsScreen() {
     val prefs = remember { ReadingPreferences(context) }
     val syncManager = remember { (context.applicationContext as Application).userPreferencesSyncManager }
     val backupManager = remember { (context.applicationContext as Application).backupManager }
-    val readingSyncManager = remember { (context.applicationContext as Application).readingProgressSyncManager }
+    val readingSync = remember<ReadingSyncManager?> { (context.applicationContext as Application).readingSyncManager }
     val scope = rememberCoroutineScope()
     
     var showSyncDashboard by remember { mutableStateOf(false) }
@@ -92,7 +93,7 @@ fun SettingsScreen() {
         SyncSettingsScreen(
             backupManager = backupManager,
             syncManager = syncManager,
-            readingSyncManager = readingSyncManager,
+            readingSync = readingSync,
             onBack = { showSyncDashboard = false }
         )
         return

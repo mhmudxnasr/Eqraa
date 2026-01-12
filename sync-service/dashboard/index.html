@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eqraa Sync Dashboard | Manage Your Reading</title>
+  <meta name="description" content="Manage your reading progress and device sync settings in one premium dashboard.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="logo">EQRAA SYNC</div>
+    <ul class="nav-links">
+      <li class="nav-item active"><i class="fas fa-th-large"></i> Overview</li>
+      <li class="nav-item"><i class="fas fa-book"></i> My Library</li>
+      <li class="nav-item"><i class="fas fa-mobile-alt"></i> Devices</li>
+      <li class="nav-item"><i class="fas fa-cog"></i> Settings</li>
+    </ul>
+  </aside>
+
+  <main class="main-content">
+    <header>
+      <h1>Sync Dashboard</h1>
+      <p class="subtitle">Ensuring your reading position is seamless across all devices.</p>
+    </header>
+
+    <div class="dashboard-grid">
+      <!-- Sync Status Card -->
+      <div class="card" id="sync-status-card">
+        <div class="card-title">
+          <span>Real-time Status</span>
+          <i class="fas fa-sync-alt"></i>
+        </div>
+        <div class="pulse-container">
+          <div class="pulse"></div>
+          <div class="pulse-inner">
+            <i class="fas fa-check" style="color: white; font-size: 1.5rem;"></i>
+          </div>
+        </div>
+        <div style="text-align: center;">
+          <h3 id="status-text">All Devices Synced</h3>
+          <p class="subtitle" id="last-sync-time" style="font-size: 0.9rem; margin-top: 8px;">Last update: Just now</p>
+        </div>
+      </div>
+
+      <!-- Device Activity Card -->
+      <div class="card" id="device-activity-card" style="grid-column: span 2;">
+        <div class="card-title">
+          <span>Active Devices</span>
+          <i class="fas fa-history"></i>
+        </div>
+        <div class="activity-list" id="activity-log">
+          <div class="activity-item">
+            <div style="display: flex; align-items: center;">
+              <div class="device-indicator"></div>
+              <div>
+                <div style="font-weight: 600;">iPhone 13 Pro</div>
+                <div class="subtitle" style="font-size: 0.85rem;">Currently Reading: "The Midnight Library"</div>
+              </div>
+            </div>
+            <span class="status-tag">ACTIVE</span>
+          </div>
+          <div class="activity-item">
+            <div style="display: flex; align-items: center;">
+              <div class="device-indicator" style="background: var(--text-secondary);"></div>
+              <div>
+                <div style="font-weight: 600;">iPad Pro 11"</div>
+                <div class="subtitle" style="font-size: 0.85rem;">Last Synced: 15 mins ago</div>
+              </div>
+            </div>
+            <span class="status-tag" style="background: rgba(255,255,255,0.05); color: var(--text-secondary);">IDLE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recently Read Section -->
+    <h2 style="margin-bottom: 2rem;">Recently Synced Books</h2>
+    <div class="recent-books" id="book-carousel">
+      <!-- Book items will be injected here -->
+      <div class="book-card">
+        <div class="book-cover">
+          <img src="https://m.media-amazon.com/images/I/81WWiiLgEyL._AC_UF1000,1000_QL80_.jpg" alt="Book Cover">
+        </div>
+        <div style="font-weight: 600; font-size: 0.9rem;">The Midnight Library</div>
+        <div class="subtitle" style="font-size: 0.8rem;">45% completed</div>
+      </div>
+      <div class="book-card">
+        <div class="book-cover">
+          <img src="https://m.media-amazon.com/images/I/81A7T1i28WL._AC_UF1000,1000_QL80_.jpg" alt="Book Cover">
+        </div>
+        <div style="font-weight: 600; font-size: 0.9rem;">Project Hail Mary</div>
+        <div class="subtitle" style="font-size: 0.8rem;">12% completed</div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
