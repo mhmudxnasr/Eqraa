@@ -113,6 +113,8 @@ fun SettingsScreen() {
     var aiProvider by remember { mutableStateOf(prefs.aiProvider) }
     var groqApiKey by remember { mutableStateOf(prefs.groqApiKey) }
     var ollamaUrl by remember { mutableStateOf(prefs.ollamaUrl) }
+    var geminiApiKey by remember { mutableStateOf(prefs.geminiApiKey) }
+    var cerebrasApiKey by remember { mutableStateOf(prefs.cerebrasApiKey) }
     
     val fonts = listOf("Literata", "Amiri", "Vazirmatn", "Lora", "Atkinson", "Inter")
     
@@ -579,6 +581,18 @@ fun SettingsScreen() {
                             onClick = { aiProvider = 2; prefs.aiProvider = 2 },
                             modifier = Modifier.weight(1f)
                         )
+                        AIProviderButton(
+                            name = "Gemini",
+                            isSelected = aiProvider == 3,
+                            onClick = { aiProvider = 3; prefs.aiProvider = 3 },
+                            modifier = Modifier.weight(1f)
+                        )
+                        AIProviderButton(
+                            name = "Cerebras",
+                            isSelected = aiProvider == 4,
+                            onClick = { aiProvider = 4; prefs.aiProvider = 4 },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                     
                     if (aiProvider == 0) {
@@ -594,6 +608,54 @@ fun SettingsScreen() {
                             value = groqApiKey,
                             onValueChange = { groqApiKey = it; prefs.groqApiKey = it },
                             placeholder = { Text("Enter your API key", color = MediumGray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                focusedBorderColor = PureBlack,
+                                unfocusedBorderColor = BorderGray,
+                                backgroundColor = OffWhite
+                            ),
+                            singleLine = true
+                        )
+                    }
+                    
+                    if (aiProvider == 3) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Gemini API Key",
+                            fontSize = 12.sp,
+                            color = DarkGray,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = geminiApiKey,
+                            onValueChange = { geminiApiKey = it; prefs.geminiApiKey = it },
+                            placeholder = { Text("Enter your Gemini API key", color = MediumGray) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                                focusedBorderColor = PureBlack,
+                                unfocusedBorderColor = BorderGray,
+                                backgroundColor = OffWhite
+                            ),
+                            singleLine = true
+                        )
+                    }
+
+                    if (aiProvider == 4) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Cerebras API Key",
+                            fontSize = 12.sp,
+                            color = DarkGray,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = cerebrasApiKey,
+                            onValueChange = { cerebrasApiKey = it; prefs.cerebrasApiKey = it },
+                            placeholder = { Text("Enter your Cerebras API key", color = MediumGray) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
                             colors = TextFieldDefaults.outlinedTextFieldColors(

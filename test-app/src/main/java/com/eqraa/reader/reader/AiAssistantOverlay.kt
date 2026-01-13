@@ -1,12 +1,12 @@
 package com.eqraa.reader.reader
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,18 +17,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import com.eqraa.reader.settings.ReadingPreferences
 
-/**
- * AI Assistant Overlay - Clean minimal design matching provided mockup
- */
 @Composable
 fun AiAssistantOverlay(
     text: String,
@@ -42,286 +40,251 @@ fun AiAssistantOverlay(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { ReadingPreferences(context) }
+    var aiProvider by remember { mutableStateOf(prefs.aiProvider) }
     var aiService by remember { mutableStateOf(AiServiceFactory.getService(context)) }
+    
     var inputText by remember { mutableStateOf("") }
     var aiResponse by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var showResponse by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-            backgroundColor = Color.White,
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.75f)
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.4f)) // Darker dim for contrast
+                .clickable(onClick = onDismiss)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Drag Handle
+            
+            // 1. RESPONSE CARD (Centered)
+            if (showResponse) {
+                AnimatedVisibility(
+                    visible = showResponse,
+                    enter = scaleIn() + fadeIn(),
+                    exit = scaleOut() + fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(bottom = 140.dp) // Leave room for dock
+                ) {
+                    FloatingResponseCard(
+                        response = aiResponse,
+                        isLoading = isLoading,
+                        providerIcon = when (aiProvider) {
+                            3 -> Icons.Default.AutoAwesome // Gemini/Gemma
+                            4 -> Icons.Default.Memory // Cerebras
+                            else -> Icons.Default.Bolt // Groq
+                        }
+                    )
+                }
+            }
+
+            // 2. STACKED DOCK (Bottom)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                StackedFloatingDock(
+                    inputText = inputText,
+                    onInputChange = { inputText = it },
+                    onSend = {
+                        scope.launch {
+                            showResponse = true
+                            isLoading = true
+                            aiResponse = ""
+                            val result = aiService.askQuestion(inputText, text, bookTitle, chapterTitle)
+                            aiResponse = result.getOrElse { "I couldn't find an answer." }
+                            isLoading = false
+                            inputText = ""
+                        }
+                    },
+                    currentProvider = aiProvider,
+                    onProviderSelect = { newProvider ->
+                        aiProvider = newProvider
+                        prefs.aiProvider = newProvider
+                        aiService = AiServiceFactory.getService(context)
+                    },
+                    onAction = { actionType ->
+                        scope.launch {
+                            showResponse = true
+                            isLoading = true
+                            aiResponse = ""
+                            val result = when(actionType) {
+                                "ExplainArabic" -> aiService.explainInArabic(text, bookTitle, chapterTitle)
+                                "Summarize" -> aiService.summarizeChapter(text, bookTitle, chapterTitle)
+                                "Explain" -> aiService.breakDownSelection(text, bookTitle, chapterTitle)
+                                else -> Result.failure(Exception("Unknown"))
+                            }
+                            aiResponse = result.getOrElse { "Operation failed." }
+                            isLoading = false
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingResponseCard(
+    response: String,
+    isLoading: Boolean,
+    providerIcon: ImageVector
+) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = Color(0xFFF2F2F2), // Slightly off-white like paper
+        elevation = 12.dp,
+        modifier = Modifier
+            .fillMaxWidth(0.85f)
+            .heightIn(min = 200.dp, max = 500.dp)
+            .clickable(enabled = false) {}
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Top Centered Icon
+            Icon(
+                imageVector = providerIcon,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(28.dp)
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = Color.Black,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(24.dp)
+                )
+            } else {
+                Text(
+                    text = response,
+                    fontSize = 17.sp,
+                    lineHeight = 28.sp,
+                    color = Color.Black,
+                    fontFamily = FontFamily.Serif, // Serif font as requested
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StackedFloatingDock(
+    inputText: String,
+    onInputChange: (String) -> Unit,
+    onSend: () -> Unit,
+    currentProvider: Int,
+    onProviderSelect: (Int) -> Unit,
+    onAction: (String) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(28.dp),
+        backgroundColor = Color(0xFF1E1E1E), // Dark dock
+        elevation = 16.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = false) {}
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+        ) {
+            // 1. Top: Input Field
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF2C2C2C))
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (inputText.isEmpty()) {
+                    Text(
+                        text = "Ask anything...",
+                        color = Color.Gray,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                }
+                BasicTextField(
+                    value = inputText,
+                    onValueChange = onInputChange,
+                    textStyle = TextStyle(
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.SansSerif
+                    ),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. Bottom: Icon Row (Providers + Actions)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Provider Group (Visual separator)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DockIcon(Icons.Default.AutoAwesome, currentProvider == 3) { onProviderSelect(3) } // Gemma
+                    DockIcon(Icons.Default.Bolt, currentProvider == 0) { onProviderSelect(0) } // Groq
+                    DockIcon(Icons.Default.Memory, currentProvider == 4) { onProviderSelect(4) } // Cerebras
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+                
+                // Divider
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp, bottom = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFFE0E0E0))
-                    )
-                }
+                        .width(1.dp)
+                        .height(24.dp)
+                        .background(Color.Gray.copy(alpha = 0.3f))
+                )
 
-                // Header with AI Icon
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFFF5F5F5)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = Color.Black,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "AI Assistant",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
-                    )
-                    Text(
-                        text = "Context loaded",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                }
+                Spacer(modifier = Modifier.width(16.dp))
 
-                // Action Buttons
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp)
-                ) {
-                    // Translate Button
-                    ActionButton(
-                        icon = Icons.Default.Translate,
-                        title = "Translate",
-                        subtitle = "Convert text language",
-                        onClick = {
-                            scope.launch {
-                                isLoading = true
-                                showResponse = true
-                                val result = aiService.translateToArabic(text)
-                                aiResponse = result.getOrElse { "Translation failed" }
-                                isLoading = false
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Summarize Button
-                    ActionButton(
-                        icon = Icons.Default.Summarize,
-                        title = "Summarize",
-                        subtitle = "Get a brief summary",
-                        onClick = {
-                            scope.launch {
-                                isLoading = true
-                                showResponse = true
-                                val result = aiService.summarizeChapter(text, bookTitle, chapterTitle)
-                                aiResponse = result.getOrElse { "Unable to summarize" }
-                                isLoading = false
-                            }
-                            onSummarizeChapter()
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Explain Button
-                    ActionButton(
-                        icon = Icons.Default.Lightbulb,
-                        title = "Explain",
-                        subtitle = "Understand the meaning",
-                        onClick = {
-                            scope.launch {
-                                isLoading = true
-                                showResponse = true
-                                val result = aiService.breakDownSelection(text, bookTitle, chapterTitle)
-                                aiResponse = result.getOrElse { "Unable to explain" }
-                                isLoading = false
-                            }
-                            onExplainSymbolism()
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Explain in Arabic Button
-                    ActionButton(
-                        icon = Icons.Default.Language,
-                        title = "شرح بالعربي",
-                        subtitle = "Explain selected text in Arabic",
-                        onClick = {
-                            scope.launch {
-                                isLoading = true
-                                showResponse = true
-                                val result = aiService.explainInArabic(text, bookTitle, chapterTitle)
-                                aiResponse = result.getOrElse { "تعذر الشرح" }
-                                isLoading = false
-                            }
-                        }
-                    )
-
-                    // Response Area
-                    if (showResponse) {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        
-                        if (isLoading) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    color = Color.Black,
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                        } else {
-                            Card(
-                                backgroundColor = Color(0xFFF9F9F9),
-                                shape = RoundedCornerShape(16.dp),
-                                elevation = 0.dp
-                            ) {
-                                Text(
-                                    text = aiResponse,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp,
-                                    color = Color.Black,
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Bottom Input Area
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    // Context Preview
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, Color(0xFFE8E8E8), RoundedCornerShape(12.dp))
-                            .padding(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "❝",
-                                fontSize = 18.sp,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = text.take(50) + if (text.length > 50) "..." else "",
-                                fontSize = 14.sp,
-                                color = Color(0xFF666666),
-                                fontStyle = FontStyle.Italic,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.size(20.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Close",
-                                    tint = Color.LightGray,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Chat Input
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(24.dp))
-                            .border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(24.dp))
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            placeholder = {
-                                Text(
-                                    text = "Ask anything...",
-                                    color = Color.Gray,
-                                    fontSize = 15.sp
-                                )
-                            },
-                            colors = TextFieldDefaults.textFieldColors(
-                                backgroundColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                cursorColor = Color.Black
-                            ),
+                // Right: Action Buttons
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    DockIcon(Icons.Default.Translate, false) { onAction("ExplainArabic") }
+                    DockIcon(Icons.Default.Description, false) { onAction("Summarize") }
+                    
+                    if (inputText.isNotBlank()) {
+                         // Send Button (Replaces Bulb when typing)
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            singleLine = true
-                        )
-
-                        IconButton(
-                            onClick = {
-                                if (inputText.isNotBlank()) {
-                                    scope.launch {
-                                        isLoading = true
-                                        showResponse = true
-                                        val result = aiService.askQuestion(inputText, text, bookTitle, chapterTitle)
-                                        aiResponse = result.getOrElse { "Unable to answer" }
-                                        isLoading = false
-                                        inputText = ""
-                                    }
-                                    onAskQuestion(inputText)
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .clickable(onClick = onSend),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.ArrowUpward,
-                                contentDescription = "Send",
-                                tint = if (inputText.isNotBlank()) Color.Black else Color.LightGray,
-                                modifier = Modifier.size(22.dp)
+                                null,
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
+                    } else {
+                        DockIcon(Icons.Default.Psychology, false) { onAction("Explain") }
                     }
                 }
             }
@@ -330,62 +293,18 @@ fun AiAssistantOverlay(
 }
 
 @Composable
-private fun ActionButton(
+private fun DockIcon(
     icon: ImageVector,
-    title: String,
-    subtitle: String,
+    isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        backgroundColor = Color.White,
-        elevation = 0.dp,
+    val tint = if (isSelected) Color.White else Color.Gray
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = tint,
         modifier = Modifier
-            .fillMaxWidth()
+            .size(26.dp)
             .clickable(onClick = onClick)
-            .border(1.dp, Color(0xFFF0F0F0), RoundedCornerShape(16.dp))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF5F5F5)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = Color.Black,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 13.sp,
-                    color = Color.Gray
-                )
-            }
-
-            Icon(
-                Icons.Default.ArrowForward,
-                contentDescription = null,
-                tint = Color(0xFFD0D0D0),
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
+    )
 }

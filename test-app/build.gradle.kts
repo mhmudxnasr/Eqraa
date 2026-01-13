@@ -22,8 +22,8 @@ android {
 
         applicationId = "com.eqraa.reader"
 
-        versionName = "3.0.0"
-        versionCode = 300
+        versionName = "3.5.0"
+        versionCode = 350
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters.add("armeabi-v7a")

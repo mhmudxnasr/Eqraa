@@ -175,32 +175,58 @@ object DictionaryService {
  */
 object TranslationService {
     
-    private const val API_URL = "https://api.mymemory.translated.net/get"
-    private const val TARGET_LANG = "ar" // Arabic only
-    
+    private const val API_URL = "https://api.groq.com/openai/v1/chat/completions"
+    private const val API_KEY = "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"
+    private const val TARGET_LANG = "ar"
+
     /**
-     * Translate text to Arabic
+     * Translate text to Arabic using Groq
      */
     suspend fun translateToArabic(text: String): Result<Translation> = withContext(Dispatchers.IO) {
         try {
-            val encodedText = URLEncoder.encode(text, "UTF-8")
-            val langPair = "en|$TARGET_LANG"
-            val url = URL("$API_URL?q=$encodedText&langpair=$langPair")
-            
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+                Be accurate and preserve the original meaning.
+                
+                After the translation, please add a newline and write a short, beautiful poem about Egypt in Arabic.
+                
+                Text to translate: "$text"
+            """.trimIndent()
+
+            val url = URL(API_URL)
             val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 5000
-            connection.readTimeout = 5000
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.setRequestProperty("Authorization", "Bearer $API_KEY")
+            connection.doOutput = true
             
+            val requestBody = JSONObject().apply {
+                put("model", "llama-3.3-70b-versatile")
+                put("messages", JSONArray().apply {
+                    put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
+                    put(JSONObject().apply { put("role", "user"); put("content", userPrompt) })
+                })
+            }.toString()
+
+            connection.outputStream.bufferedWriter().use { it.write(requestBody) }
+
             if (connection.responseCode == 200) {
                 val response = connection.inputStream.bufferedReader().readText()
-                val translation = parseTranslation(text, response)
-                Result.success(translation)
+                val obj = JSONObject(response)
+                val translatedText = obj.getJSONArray("choices")
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content")
+                    .trim()
+                    
+                Result.success(Translation(text, TARGET_LANG, translatedText))
             } else {
-                Result.success(Translation(text, TARGET_LANG, "الترجمة غير متاحة"))
+                val error = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
+                Result.success(Translation(text, TARGET_LANG, "Translation Error: $error"))
             }
         } catch (e: Exception) {
-            Result.success(Translation(text, TARGET_LANG, "الترجمة غير متاحة"))
+            Result.success(Translation(text, TARGET_LANG, "Translation Error: ${e.message}"))
         }
     }
     
@@ -209,17 +235,6 @@ object TranslationService {
      */
     suspend fun translate(text: String, targetLang: String = TARGET_LANG): Result<Translation> = 
         translateToArabic(text)
-    
-    private fun parseTranslation(sourceText: String, json: String): Translation {
-        return try {
-            val obj = org.json.JSONObject(json)
-            val responseData = obj.getJSONObject("responseData")
-            val translatedText = responseData.getString("translatedText")
-            Translation(sourceText, TARGET_LANG, translatedText)
-        } catch (e: Exception) {
-            Translation(sourceText, TARGET_LANG, "الترجمة غير متاحة")
-        }
-    }
 }
 
 /**
@@ -279,6 +294,72 @@ interface AiService {
     suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String>
 }
 
+object Prompts {
+    val ENGLISH_EXPLANATION = """
+        <system_instruction mode="english_explanation">
+            <role>
+                You are an expert simplifier. Your task is to explain the selected text clearly and concisely in English.
+            </role>
+
+            <task>
+                Analyze the input text and provide a direct explanation of its meaning.
+                - If it's a complex word, define it.
+                - If it's a metaphor, explain the literal meaning.
+            </task>
+
+            <constraints>
+                - Length: 2-3 sentences maximum.
+                - Format: Plain text only. No bullet points or headers.
+                - Tone: Neutral and helpful.
+            </constraints>
+        </system_instruction>
+    """.trimIndent()
+
+    val ARABIC_EXPLANATION = """
+        <system_instruction mode="arabic_explanation">
+            <role>
+                You are a linguistic expert "Al-Mufassir". Your task is to explain the meaning of the English text in clear Modern Standard Arabic.
+            </role>
+
+            <task>
+                Read the English input and explain the *concept* in Arabic.
+                - Do not translate word-for-word.
+                - Capture the nuance and feeling of the text.
+            </task>
+
+            <constraints>
+                - Language: Simple, warm Modern Standard Arabic.
+                - Format: Direct paragraph. No intro, no filler.
+                - Goal: Clarity over literal accuracy.
+            </constraints>
+        </system_instruction>
+    """.trimIndent()
+
+    val REAL_LIFE_SCENARIO = """
+        <system_instruction mode="real_life_scenario">
+            <role>
+                You are a "Contextual Anchor". Your sole purpose is to translate abstract concepts into tangible, everyday scenarios.
+            </role>
+
+            <task>
+                Ignore the literary phrasing and focus on the *logic* or *emotion* of the text.
+                Create a "Real-Life Scenario" that matches this logic using universal experiences (e.g., traffic, office work, mechanics, nature).
+            </task>
+
+            <output_template>
+                **The Scenario:**
+                "It is like [Situation]. [Explanation of how the situation mirrors the text]."
+            </output_template>
+
+            <constraints>
+                - Start directly with "It is like..." or "Imagine...".
+                - Keep the analogy modern and universally understood.
+                - Max 3 sentences.
+            </constraints>
+        </system_instruction>
+    """.trimIndent()
+}
+
 /**
  * Factory and provider for AI services based on user preferences
  */
@@ -288,7 +369,113 @@ object AiServiceFactory {
         return when (prefs.aiProvider) {
             1 -> OpenRouterService
             2 -> OllamaService(prefs.ollamaUrl)
+            3 -> GeminiService(prefs.geminiApiKey)
+            4 -> CerebrasService(prefs.cerebrasApiKey)
             else -> GroqService(prefs.groqApiKey)
+        }
+    }
+}
+
+/**
+ * Service for AI responses using Cerebras API
+ */
+class CerebrasService(private val customApiKey: String?) : AiService {
+    
+    private val API_URL = "https://api.cerebras.ai/v1/chat/completions"
+    private val DEFAULT_KEY = "csk-m9k5m9wecj5f6y33wx6y9ctpxdvhfyxcnv4vvyr8x8vfmwxt"
+    private val API_KEY = if (customApiKey.isNullOrBlank()) DEFAULT_KEY else customApiKey
+
+    override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$selection"
+            """.trimIndent()
+            
+            if (API_KEY.isBlank()) return@withContext Result.failure(Exception("API Key not set"))
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun summarizeChapter(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Reference text: \"$selectedText\"."
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun explainSymbolism(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.REAL_LIFE_SCENARIO
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to analyze: "$selectedText"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun askQuestion(question: String, selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Book: \"$bookTitle\", Chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer this question in friendly, clear English: $question"
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+                
+                Text to translate: "$text"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$text"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    private fun makeRequest(systemContent: String, userContent: String): String {
+        val url = URL(API_URL)
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.setRequestProperty("Authorization", "Bearer $API_KEY")
+        connection.doOutput = true
+        
+        val requestBody = JSONObject().apply {
+            put("model", "llama-3.3-70b")
+            put("messages", JSONArray().apply {
+                put(JSONObject().apply { put("role", "system"); put("content", systemContent) })
+                put(JSONObject().apply { put("role", "user"); put("content", userContent) })
+            })
+        }.toString()
+
+        connection.outputStream.bufferedWriter().use { it.write(requestBody) }
+
+        return if (connection.responseCode == 200) {
+            val response = connection.inputStream.bufferedReader().readText()
+            val obj = JSONObject(response)
+            obj.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+        } else {
+            "Cerebras API Error ${connection.responseCode}: ${connection.errorStream?.bufferedReader()?.readText()}"
         }
     }
 }
@@ -302,83 +489,79 @@ class OllamaService(private val baseUrl: String) : AiService {
 
     override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert helping a non-native reader.
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
-                Explain this phrase in 2-3 sentences:
-                "$selection"
-                
-                Be concise. No bullet points or formatting.
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$selection"
             """.trimIndent()
-            val response = makeRequest(prompt)
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun summarizeChapter(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Use this reference text: \"$selectedText\""
-            val response = makeRequest(prompt)
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Use this reference text: \"$selectedText\""
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainSymbolism(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a helpful reading companion. Speak in clear, friendly English.
-                CONTEXT: Book: "$bookTitle", Chapter: "$chapterTitle".
-                TEXT: "$selectedText"
-                TASK:
-                1. MEANING: Explain the hidden symbolism in one concise sentence.
-                2. INSIGHT: Provide a modern, relatable analogy.
-                FORMAT:
-                **Meaning:** [Symbolism explanation]
-                **Insight:** [Relatable analogy]
+            val systemPrompt = Prompts.REAL_LIFE_SCENARIO
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to analyze: "$selectedText"
             """.trimIndent()
-            val response = makeRequest(prompt)
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun askQuestion(question: String, selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "As a reading companion, the book is \"$bookTitle\" and the chapter is \"$chapterTitle\". The text: \"$selectedText\". Answer this question in friendly, clear English: $question"
-            val response = makeRequest(prompt)
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "As a reading companion, the book is \"$bookTitle\" and the chapter is \"$chapterTitle\". The text: \"$selectedText\". Answer this question in friendly, clear English: $question"
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a professional translator. Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+                1. Provide the main translation clearly.
+                2. Provide 3 varied sentences as examples showing how this word/phrase is used in different contexts (with their Arabic translations).
+                
+                Format clear and readable.
                 
                 Text to translate: "$text"
             """.trimIndent()
-            val response = makeRequest(prompt)
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert. Explain the following text in clear, simple Arabic (العربية).
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
                 Text to explain: "$text"
-                
-                Provide the explanation directly in Arabic.
             """.trimIndent()
-            val response = makeRequest(prompt)
+            val response = makeRequest(systemPrompt, userPrompt)
             Result.success(response)
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    private fun makeRequest(prompt: String): String {
+    private fun makeRequest(systemPrompt: String, userPrompt: String): String {
         return try {
             val url = URL("${baseUrl.trimEnd('/')}/api/generate")
             val connection = url.openConnection() as HttpURLConnection
@@ -388,9 +571,11 @@ class OllamaService(private val baseUrl: String) : AiService {
             connection.connectTimeout = 60000
             connection.readTimeout = 60000
 
+            val fullPrompt = "$systemPrompt\n\n$userPrompt"
+
             val requestBody = JSONObject().apply {
                 put("model", model)
-                put("prompt", prompt)
+                put("prompt", fullPrompt)
                 put("stream", false)
             }.toString()
 
@@ -415,83 +600,76 @@ class OllamaService(private val baseUrl: String) : AiService {
 class GroqService(private val customApiKey: String?) : AiService {
     
     private val API_URL = "https://api.groq.com/openai/v1/chat/completions"
-    private val DEFAULT_KEY = "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" // User must provide their own key in settings
+    private val DEFAULT_KEY = "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" // User must provide their own key in settings
     private val API_KEY = if (customApiKey.isNullOrBlank()) DEFAULT_KEY else customApiKey
 
     override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert helping a non-native reader.
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
-                Explain this phrase in 2-3 sentences:
-                "$selection"
-                
-                Be concise. No bullet points or formatting.
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$selection"
             """.trimIndent()
             if (API_KEY.isBlank()) return@withContext Result.failure(Exception("API Key not set"))
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun summarizeChapter(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Reference text: \"$selectedText\"."
-            Result.success(makeRequest(prompt))
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Reference text: \"$selectedText\"."
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainSymbolism(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a helpful reading companion. Speak in clear, friendly English.
-                CONTEXT: Book: "$bookTitle", Chapter: "$chapterTitle".
-                TEXT: "$selectedText"
-                TASK:
-                1. MEANING: Explain hidden symbolism concisely.
-                2. INSIGHT: Provide a modern, relatable analogy.
-                FORMAT:
-                **Meaning:** [Explanation]
-                **Insight:** [Analogy]
+            val systemPrompt = Prompts.REAL_LIFE_SCENARIO
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to analyze: "$selectedText"
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun askQuestion(question: String, selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "Book: \"$bookTitle\", Chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer this question in friendly, clear English: $question"
-            Result.success(makeRequest(prompt))
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Book: \"$bookTitle\", Chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer this question in friendly, clear English: $question"
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a professional translator. Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
                 Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
                 
                 Text to translate: "$text"
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert. Explain the following text in clear, simple Arabic (العربية).
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
                 Text to explain: "$text"
-                
-                Provide the explanation directly in Arabic.
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    private fun makeRequest(prompt: String): String {
+    private fun makeRequest(systemContent: String, userContent: String): String {
         val url = URL(API_URL)
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
@@ -502,8 +680,8 @@ class GroqService(private val customApiKey: String?) : AiService {
         val requestBody = JSONObject().apply {
             put("model", "llama-3.3-70b-versatile")
             put("messages", JSONArray().apply {
-                put(JSONObject().apply { put("role", "system"); put("content", "You are a helpful reading companion.") })
-                put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                put(JSONObject().apply { put("role", "system"); put("content", systemContent) })
+                put(JSONObject().apply { put("role", "user"); put("content", userContent) })
             })
         }.toString()
 
@@ -529,73 +707,70 @@ object OpenRouterService : AiService {
 
     override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert helping a non-native reader.
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
-                Explain this phrase in 2-3 sentences:
-                "$selection"
-                
-                Be concise. No bullet points or formatting.
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$selection"
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun summarizeChapter(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "Summarize chapter \"$chapterTitle\" from \"$bookTitle\" in clear, concise English. Reference: \"$selectedText\"."
-            Result.success(makeRequest(prompt))
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Summarize chapter \"$chapterTitle\" from \"$bookTitle\" in clear, concise English. Reference: \"$selectedText\"."
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainSymbolism(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a helpful reading companion. Speak in clear, friendly English.
-                Analyze symbolism in "$bookTitle": "$selectedText".
-                FORMAT:
-                **Meaning:** [Symbolism]
-                **Insight:** [Modern Analogy]
+            val systemPrompt = Prompts.REAL_LIFE_SCENARIO
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to analyze: "$selectedText"
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun askQuestion(question: String, selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = "As a reading companion, book: \"$bookTitle\", chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer in friendly, clear English: $question"
-            Result.success(makeRequest(prompt))
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "As a reading companion, book: \"$bookTitle\", chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer in friendly, clear English: $question"
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a professional translator. Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+            val systemPrompt = "You are a professional translator."
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
                 Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
                 
                 Text to translate: "$text"
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     override suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = """
-                You are a literary expert. Explain the following text in clear, simple Arabic (العربية).
-                Book: "$bookTitle", Chapter: "$chapterTitle".
-                
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
                 Text to explain: "$text"
-                
-                Provide the explanation directly in Arabic.
             """.trimIndent()
-            Result.success(makeRequest(prompt))
+            Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    private fun makeRequest(prompt: String): String {
+    private fun makeRequest(systemContent: String, userContent: String): String {
         val url = URL(API_URL)
         val connection = url.openConnection() as HttpURLConnection
         connection.requestMethod = "POST"
@@ -608,8 +783,8 @@ object OpenRouterService : AiService {
         val requestBody = JSONObject().apply {
             put("model", "mistralai/mistral-7b-instruct:free")
             put("messages", JSONArray().apply {
-                put(JSONObject().apply { put("role", "system"); put("content", "You are a helpful reading companion.") })
-                put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                put(JSONObject().apply { put("role", "system"); put("content", systemContent) })
+                put(JSONObject().apply { put("role", "user"); put("content", userContent) })
             })
         }.toString()
 
@@ -621,6 +796,117 @@ object OpenRouterService : AiService {
             obj.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
         } else {
             "OpenRouter Error ${connection.responseCode}: ${connection.errorStream?.bufferedReader()?.readText()}"
+        }
+    }
+}
+
+/**
+ * Service for AI responses using Google's Gemini API
+ */
+class GeminiService(private val customApiKey: String?) : AiService {
+    
+    private val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
+    private val DEFAULT_KEY = "AIzaSyDl4vofGbI-tsfIBlj7JPus0e8sUtypB48"
+    private val API_KEY = if (customApiKey.isNullOrBlank()) DEFAULT_KEY else customApiKey
+    private val model = "gemma-3-12b-it"
+
+    override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$selection"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun summarizeChapter(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Summarize chapter \"$chapterTitle\" from the book \"$bookTitle\" in clear, concise English. Reference text: \"$selectedText\"."
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun explainSymbolism(selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.REAL_LIFE_SCENARIO
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to analyze: "$selectedText"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun askQuestion(question: String, selectedText: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ENGLISH_EXPLANATION
+            val userPrompt = "Book: \"$bookTitle\", Chapter: \"$chapterTitle\". Text: \"$selectedText\". Answer this question in friendly, clear English: $question"
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
+                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+                
+                Text to translate: "$text"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    override suspend fun explainInArabic(text: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val userPrompt = """
+                Book: "$bookTitle"
+                Chapter: "$chapterTitle"
+                Text to explain: "$text"
+            """.trimIndent()
+            Result.success(makeRequest(systemPrompt, userPrompt))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    private fun makeRequest(systemContent: String, userContent: String): String {
+        val url = URL("$BASE_URL$model:generateContent?key=$API_KEY")
+        val connection = url.openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Content-Type", "application/json")
+        connection.doOutput = true
+        
+        val requestBody = JSONObject().apply {
+            put("contents", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("role", "user")
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", systemContent + "\n\n" + userContent) })
+                    })
+                })
+            })
+        }.toString()
+
+        connection.outputStream.bufferedWriter().use { it.write(requestBody) }
+
+        return if (connection.responseCode == 200) {
+            val response = connection.inputStream.bufferedReader().readText()
+            val obj = JSONObject(response)
+            obj.getJSONArray("candidates")
+                .getJSONObject(0)
+                .getJSONObject("content")
+                .getJSONArray("parts")
+                .getJSONObject(0)
+                .getString("text")
+                .trim()
+        } else {
+            "Gemini API Error ${connection.responseCode}: ${connection.errorStream?.bufferedReader()?.readText()}"
         }
     }
 }

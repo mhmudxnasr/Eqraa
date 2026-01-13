@@ -31,6 +31,8 @@ class ReadingPreferences(context: Context, private val bookId: String? = null) {
         private const val KEY_AI_PROVIDER = "ai_provider"
         private const val KEY_GROQ_API_KEY = "groq_api_key"
         private const val KEY_OLLAMA_URL = "ollama_url"
+        private const val KEY_GEMINI_API_KEY = "gemini_api_key"
+        private const val KEY_CEREBRAS_API_KEY = "cerebras_api_key"
         private const val KEY_IS_EDIT_MODE = "is_edit_mode"
         
         // Defaults
@@ -134,7 +136,7 @@ class ReadingPreferences(context: Context, private val bookId: String? = null) {
         get() = getBoolean(KEY_AI_ENABLED, true)
         set(value) = putBoolean(KEY_AI_ENABLED, value)
     
-    // AI Provider (0: Groq, 1: OpenRouter, 2: Ollama)
+    // AI Provider (0: Groq, 1: OpenRouter, 2: Ollama, 3: Gemini, 4: Cerebras)
     var aiProvider: Int
         get() = getInt(KEY_AI_PROVIDER, 0)
         set(value) = putInt(KEY_AI_PROVIDER, value)
@@ -148,6 +150,16 @@ class ReadingPreferences(context: Context, private val bookId: String? = null) {
     var ollamaUrl: String
         get() = getString(KEY_OLLAMA_URL, "http://10.0.2.2:11434")
         set(value) = putString(KEY_OLLAMA_URL, value)
+    
+    // Gemini API Key
+    var geminiApiKey: String
+        get() = getString(KEY_GEMINI_API_KEY, "")
+        set(value) = putString(KEY_GEMINI_API_KEY, value)
+
+    // Cerebras API Key
+    var cerebrasApiKey: String
+        get() = getString(KEY_CEREBRAS_API_KEY, "")
+        set(value) = putString(KEY_CEREBRAS_API_KEY, value)
     
     // Edit Mode (false = Read Mode, true = Edit Mode with stylus highlighter)
     var isEditMode: Boolean

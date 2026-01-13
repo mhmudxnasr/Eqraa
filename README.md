@@ -1,14 +1,20 @@
-# Eqraa Reader v3.0.0
+# Eqraa Reader v3.5.0
 
 **Eqraa** is a premium, open-source reading application reimagined for modern Android devices. Built with a focus on immersive design, powerful synchronization, and privacy, Eqraa provides the ultimate reading experience for EPUB, PDF, and Audiobooks.
 
-## What's New in v3.0.0
+## What's New in v3.5.0
 
-### 🎨 Immersive & Premium UI
-- **Transparent Status Bar**: The app now draws content behind the system status bars for a true full-screen experience.
-- **Top-Only Navigation**: We've removed the bottom bar and consolidated controls into a sleek, top-aligned header.
-- **Smart Accessibility**: Tap the **Top 20%** of the screen to reveal controls; tap elsewhere to turn pages without distraction.
-- **Minimalist Aesthetic**: Strict Black & White theme for high contrast and focus.
+### 🧠 Advanced AI Personas
+- **Specialized Modes**: Choose from **English Explanation**, **Arabic Explanation**, and **Real Life Scenario** to tailor the AI's assistance to your needs.
+- **Visual Identity**: Distinct icons for each AI mode help you easily identify the active persona.
+
+### 🌍 Enhanced Translation
+- **Context-Rich**: Translations now include usage examples to help you fully understand the context.
+- **Reliability**: Improved integration with Groq API for faster and more accurate results.
+
+### 🎨 Refined UI/UX
+- **Visual Clarity**: Updated iconography for a more intuitive user experience.
+- **Polished Experience**: General bug fixes and performance improvements.
 
 ### ☁️ Next-Gen Sync (Powered by Supabase)
 - **Real-time Progress**: Switch between devices instantly. Your page, bookmark, and highlights sync in real-time.

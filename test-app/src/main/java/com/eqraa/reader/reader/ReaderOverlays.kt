@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,12 +31,13 @@ import kotlinx.coroutines.launch
 import com.eqraa.reader.settings.ReadingPreferences
 
 // Color constants for consistent theming
-private val DarkBackground = Color(0xFF1C1C1E)
-private val DarkSurface = Color(0xFF2C2C2E)
-private val AccentBlue = Color(0xFF007AFF)
-private val TextPrimary = Color.White
-private val TextSecondary = Color(0xFF8E8E93)
-private val LightBackground = Color(0xFFF2F2F7)
+// Color constants for Light Theme
+private val LightBackground = Color(0xFFFFFFFF) // Pure White
+private val LightSurface = Color(0xFFF5F5F5) // Very light gray for backgrounds
+private val AccentBlue = Color(0xFF007AFF) // iOS Blue
+private val TextPrimary = Color(0xFF000000) // Black
+private val TextSecondary = Color(0xFF8E8E93) // Gray
+private val DividerColor = Color(0xFFE5E5EA) // Light Divider
 
 /**
  * Enhanced Dictionary/Translate Overlay with real API integration.
@@ -58,12 +60,18 @@ fun DictionaryOverlay(
     var dictionaryEntry by remember { mutableStateOf<DictionaryEntry?>(null) }
     var isLoadingDictionary by remember { mutableStateOf(true) }
     
-    // Translation state
-    var translations by remember { mutableStateOf<List<Translation>>(emptyList()) }
-    var isLoadingTranslation by remember { mutableStateOf(true) }
+    // AI Translation state
+    var aiTranslation by remember { mutableStateOf("") }
+    var isAiLoading by remember { mutableStateOf(false) }
     
     // TTS helper
     val ttsHelper = remember { TtsHelper(context) }
+    val prefs = remember { ReadingPreferences(context) }
+    
+    // Initialize AI Service (Forced to Groq as per user request)
+    // We instantiate GroqService directly to ensure it is always used for translations
+    // regardless of the user's "AI Provider" setting for other features.
+    val aiService = remember { GroqService(prefs.groqApiKey) }
     
     // Load dictionary on launch
     LaunchedEffect(text) {
@@ -73,15 +81,15 @@ fun DictionaryOverlay(
         isLoadingDictionary = false
     }
     
-    // Load Arabic translation when translate tab is selected
+    // Load AI Arabic translation when translate tab is selected
     LaunchedEffect(selectedTab, text) {
-        if (selectedTab == 1 && translations.isEmpty()) {
-            isLoadingTranslation = true
-            val result = TranslationService.translateToArabic(text)
-            result.onSuccess { translation ->
-                translations = listOf(translation)
-            }
-            isLoadingTranslation = false
+        if (selectedTab == 1 && aiTranslation.isEmpty()) {
+            isAiLoading = true
+            // Use AI Service for translation
+            // Note: We use the generic translateToArabic which uses the active service
+            val result = aiService.translateToArabic(text)
+            aiTranslation = result.getOrElse { "Could not generate translation." }
+            isAiLoading = false
         }
     }
     
@@ -94,9 +102,10 @@ fun DictionaryOverlay(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-            backgroundColor = DarkBackground,
+            shape = RoundedCornerShape(24.dp),
+            backgroundColor = LightBackground,
             contentColor = TextPrimary,
+            elevation = 16.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.75f)
@@ -104,7 +113,7 @@ fun DictionaryOverlay(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(24.dp)
             ) {
                 // Drag Handle
                 Box(
@@ -113,42 +122,47 @@ fun DictionaryOverlay(
                 ) {
                     Box(
                         modifier = Modifier
-                            .width(36.dp)
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(2.5.dp))
-                            .background(Color(0xFF3A3A3C))
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color(0xFFE0E0E0))
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Word Display
                 Text(
                     text = dictionaryEntry?.word?.replaceFirstChar { it.uppercase() } 
                         ?: text.replaceFirstChar { it.uppercase() },
-                    fontSize = 28.sp,
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
 
                 // Pronunciation
                 Text(
-                    text = dictionaryEntry?.phonetic ?: "",
-                    fontSize = 14.sp,
+                    text = dictionaryEntry?.phonetic ?: "/.../",
+                    fontSize = 16.sp,
                     color = TextSecondary,
+                    fontFamily = FontFamily.Serif,
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Tab Selector
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Tab Selector (Segmented Control)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(DarkSurface)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(LightSurface)
                         .padding(4.dp)
                 ) {
                     TabButton(
@@ -165,9 +179,9 @@ fun DictionaryOverlay(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Action Buttons Row
+                // Action Buttons Row (Minimalist)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -187,25 +201,19 @@ fun DictionaryOverlay(
                         }
                     )
                     ActionIconButton(
-                        icon = Icons.Default.Bookmark,
+                        icon = Icons.Default.BookmarkBorder, // Outline style
                         label = "Save",
                         onClick = { 
                             onSave(text)
                             android.widget.Toast.makeText(context, "Word saved!", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     )
-                    ActionIconButton(
-                        icon = Icons.Default.Edit,
-                        label = "Note",
-                        onClick = { 
-                            onAddNote(text)
-                        }
-                    )
+
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Divider(color = DarkSurface, thickness = 1.dp)
+                Divider(color = DividerColor, thickness = 1.dp)
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -227,7 +235,7 @@ fun DictionaryOverlay(
                             DictionaryContent(dictionaryEntry)
                         }
                     } else {
-                        if (isLoadingTranslation) {
+                        if (isAiLoading) {
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.Center
@@ -235,7 +243,15 @@ fun DictionaryOverlay(
                                 CircularProgressIndicator(color = AccentBlue)
                             }
                         } else {
-                            TranslateContent(translations)
+                             // Plain Text AI Response
+                             Text(
+                                 text = aiTranslation,
+                                 fontSize = 18.sp,
+                                 lineHeight = 28.sp,
+                                 color = TextPrimary,
+                                 fontFamily = FontFamily.Serif,
+                                 modifier = Modifier.fillMaxWidth()
+                             )
                         }
                     }
                 }
@@ -277,23 +293,25 @@ private fun ActionIconButton(
     ) {
         Box(
             modifier = Modifier
-                .size(50.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(DarkSurface),
+                .background(LightSurface) // Light gray circle
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 icon,
                 contentDescription = label,
                 tint = TextPrimary,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = label,
-            fontSize = 11.sp,
-            color = TextSecondary
+            fontSize = 12.sp,
+            color = TextSecondary,
+            fontWeight = FontWeight.Medium
         )
     }
 }
@@ -314,7 +332,7 @@ private fun DictionaryContent(entry: DictionaryEntry?) {
         entry.meanings.forEachIndexed { index, meaning ->
             if (index > 0) {
                 Spacer(modifier = Modifier.height(20.dp))
-                Divider(color = DarkSurface, thickness = 1.dp)
+                Divider(color = DividerColor, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(16.dp))
             }
             
@@ -395,7 +413,7 @@ private fun DefinitionSection(
                     .padding(start = 12.dp)
                     .border(
                         width = 2.dp,
-                        color = DarkSurface,
+                        color = DividerColor,
                         shape = RoundedCornerShape(4.dp)
                     )
             ) {
@@ -417,7 +435,7 @@ private fun SynonymChip(text: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(DarkSurface)
+            .background(LightSurface)
             .clickable { 
                 ClipboardHelper.copyToClipboard(context, text, "Synonym")
             }
@@ -428,29 +446,6 @@ private fun SynonymChip(text: String) {
             fontSize = 14.sp,
             color = TextPrimary
         )
-    }
-}
-
-@Composable
-private fun TranslateContent(translations: List<Translation>) {
-    if (translations.isEmpty()) {
-        Text(
-            text = "No translations available",
-            color = TextSecondary,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center
-        )
-        return
-    }
-    
-    Column {
-        translations.forEach { translation ->
-            TranslationEntry(
-                language = getLanguageName(translation.targetLanguage),
-                translation = translation.translatedText
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-        }
     }
 }
 
@@ -467,28 +462,5 @@ private fun getLanguageName(code: String): String {
         "ko" -> "Korean"
         "ru" -> "Russian"
         else -> code.uppercase()
-    }
-}
-
-@Composable
-private fun TranslationEntry(language: String, translation: String) {
-    val context = LocalContext.current
-    Column(
-        modifier = Modifier.clickable {
-            ClipboardHelper.copyToClipboard(context, translation, "Translation")
-        }
-    ) {
-        Text(
-            text = language,
-            color = TextSecondary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = translation,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold
-        )
     }
 }

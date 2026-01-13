@@ -84,6 +84,8 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
@@ -712,43 +714,125 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
 
     private inner class SelectionActionModeCallback : BaseActionModeCallback() {
         override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
-            mode.menuInflater.inflate(R.menu.menu_action_mode, menu)
-            if (navigator is DecorableNavigator) {
-                menu.findItem(R.id.highlight).isVisible = true
-                menu.findItem(R.id.underline).isVisible = true
-                menu.findItem(R.id.note).isVisible = true
-                menu.findItem(R.id.define).isVisible = true
-                menu.findItem(R.id.translate).isVisible = true
-                menu.findItem(R.id.ask_ai).isVisible = true
-            }
+            // We return true to start the action mode (keeping selection active)
+            // but we don't inflate any menu items to avoid the system toolbar.
+            // Instead, we show our custom popup.
+            showSelectionPopup()
             return true
         }
 
-        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
-            when (item.itemId) {
-                R.id.highlight -> showHighlightPopupWithStyle(Highlight.Style.HIGHLIGHT)
-                R.id.underline -> showHighlightPopupWithStyle(Highlight.Style.UNDERLINE)
-                R.id.note -> showAnnotationPopup()
-                R.id.define -> {
-                    showDictionaryOverlay(0)
-                    mode.finish()
-                    return true
-                }
-                R.id.translate -> {
-                    showDictionaryOverlay(1)
-                    mode.finish()
-                    return true
-                }
-                R.id.ask_ai -> {
-                    showAiOverlay()
-                    mode.finish()
-                    return true
-                }
-                else -> return false
-            }
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+            // Ensure menu is empty
+            menu.clear()
+            return false 
+        }
 
-            mode.finish()
-            return true
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+            // Not used as we handle clicks in our custom popup
+            return false
+        }
+        
+        override fun onDestroyActionMode(mode: ActionMode) {
+             // Dismiss our popup when action mode is destroyed (e.g. selection cleared)
+             selectionPopupWindow?.dismiss()
+             super.onDestroyActionMode(mode)
+        }
+    }
+    
+    private var selectionPopupWindow: PopupWindow? = null
+
+    private fun showSelectionPopup() {
+         viewLifecycleOwner.lifecycleScope.launch {
+             // Slight delay to ensure selection rect is available
+             delay(100)
+             
+             if (!isAdded || view == null) return@launch
+
+            try {
+                (navigator as? SelectableNavigator)?.currentSelection()?.rect?.let { r ->
+                     // Normalize rect if needed (bottom < top)
+                    val selectionRect = if (r.bottom < r.top) {
+                        RectF(r.left, r.bottom, r.right, r.top)
+                    } else {
+                        r
+                    }
+
+                    if (selectionPopupWindow?.isShowing == true) return@launch
+
+                    val popupView = layoutInflater.inflate(R.layout.popup_selection, null, false)
+                    popupView.measure(
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                    )
+
+                    selectionPopupWindow = PopupWindow(
+                        popupView,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
+                        isFocusable = false // Don't take focus so selection remains
+                        isOutsideTouchable = false
+                        elevation = 8f
+                        setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+                    }
+
+                    // Calculate position (centered above selection)
+                    val x = selectionRect.centerX().toInt() - (popupView.measuredWidth / 2)
+                    // Default to above, but check space
+                    val yAbove = selectionRect.top.toInt() - popupView.measuredHeight - 20
+                    
+                    val screenWidth = resources.displayMetrics.widthPixels
+                    
+                    // Fix: Ensure max is at least min to avoid IllegalArgumentException
+                    val minX = 20
+                    val maxSafeX = (screenWidth - popupView.measuredWidth - 20).coerceAtLeast(minX)
+                    val safeX = x.coerceIn(minX, maxSafeX)
+                    
+                    // If not enough space above, show below
+                    val safeY = if (yAbove < 100) {
+                         selectionRect.bottom.toInt() + 20
+                    } else {
+                         yAbove
+                    }
+
+                    view?.let { parentView ->
+                        selectionPopupWindow?.showAtLocation(parentView, Gravity.NO_GRAVITY, safeX, safeY)
+                    }
+
+                    // Set click listeners
+                    popupView.findViewById<View>(R.id.action_highlight).setOnClickListener {
+                        showHighlightPopupWithStyle(Highlight.Style.HIGHLIGHT)
+                        selectionPopupWindow?.dismiss()
+                        mode?.finish() 
+                    }
+                    
+
+                    
+                    popupView.findViewById<View>(R.id.action_note).setOnClickListener {
+                        showAnnotationPopup()
+                        selectionPopupWindow?.dismiss()
+                        mode?.finish()
+                    }
+                    
+                    popupView.findViewById<View>(R.id.action_define).setOnClickListener {
+                        showDictionaryOverlay(0)
+                        selectionPopupWindow?.dismiss()
+                        mode?.finish()
+                    }
+                    
+
+                    
+                    popupView.findViewById<View>(R.id.action_ask_ai).setOnClickListener {
+                        showAiOverlay()
+                        selectionPopupWindow?.dismiss()
+                        mode?.finish()
+                    }
+                }
+            } catch (e: Exception) {
+                // Log error but don't crash app
+                android.util.Log.e("SelectionPopup", "Error showing popup", e)
+                e.printStackTrace()
+            }
         }
     }
 
