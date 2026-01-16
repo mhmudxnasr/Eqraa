@@ -232,26 +232,14 @@ class BookshelfFragment : Fragment() {
         */
 
         binding.bookshelfAddBookFab.setOnClickListener {
-            var selected = 0
-            MaterialAlertDialogBuilder(requireContext())
-                .setTitle(getString(R.string.add_book))
-                .setNegativeButton(getString(R.string.cancel)) { dialog, _ ->
-                    dialog.cancel()
+            val bottomSheet = AddBookBottomSheet(
+                onImportAppStorage = { appStoragePickerLauncher.launch("*/*") },
+                onConnectCalibre = { askForCalibreUrl() },
+                onVocabularyBuilder = { 
+                    startActivity(Intent(requireContext(), com.eqraa.reader.flashcards.FlashcardActivity::class.java))
                 }
-                .setPositiveButton(getString(R.string.ok)) { _, _ ->
-                    when (selected) {
-                        0 -> appStoragePickerLauncher.launch("*/*")
-                        1 -> sharedStoragePickerLauncher.launch(arrayOf("*/*"))
-                        2 -> askForRemoteUrl()
-                        3 -> findNavController().navigate(R.id.action_bookshelfFragment_to_opds)
-                        4 -> askForCalibreUrl()
-                        5 -> startActivity(Intent(requireContext(), com.eqraa.reader.flashcards.FlashcardActivity::class.java))
-                    }
-                }
-                .setSingleChoiceItems(R.array.documentSelectorArray, 0) { _, which ->
-                    selected = which
-                }
-                .show()
+            )
+            bottomSheet.show(childFragmentManager, "AddBookBottomSheet")
         }
 
         // Swipe to Refresh (Sync All)

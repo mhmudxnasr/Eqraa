@@ -17,6 +17,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -95,7 +97,8 @@ fun ReaderSettingsScreen(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Drag Handle
@@ -488,9 +491,8 @@ fun AdvancedSettingsSection(
                          ) { Text("1.8", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) }
                     }
                 }
+                Spacer(modifier = Modifier.height(20.dp))
             }
-            
-            Spacer(modifier = Modifier.height(20.dp))
             
             // 3. Word Spacing (NEW)
             editor.wordSpacing?.let { wordSpacingPref ->
@@ -522,10 +524,9 @@ fun AdvancedSettingsSection(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(20.dp))
             }
              
-            Spacer(modifier = Modifier.height(20.dp))
-
             // 4. Font Weight / Bolding (NEW)
             editor.fontWeight?.let { weightPref ->
                 Row(
@@ -556,9 +557,8 @@ fun AdvancedSettingsSection(
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(20.dp))
             }
-            
-            Spacer(modifier = Modifier.height(20.dp))
             
             // 5. Margins
             editor.pageMargins?.let { marginPref ->
@@ -594,9 +594,8 @@ fun AdvancedSettingsSection(
                          ) { Text("L", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) }
                     }
                 }
+                Spacer(modifier = Modifier.height(20.dp))
             }
-            
-            Spacer(modifier = Modifier.height(20.dp))
             
             // 6. Scroll Mode
              editor.scroll?.let { scrollPref ->
