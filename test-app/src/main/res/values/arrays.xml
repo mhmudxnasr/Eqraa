@@ -4,6 +4,9 @@
         <item>Import to app storage</item>
         <item>Read from shared storage</item>
         <item>Stream from the Web</item>
+        <item>Browse Online Catalogs</item>
+        <item>Connect to Calibre</item>
+        <item>Vocabulary Builder</item>
     </string-array>
 
 </resources>

@@ -27,6 +27,7 @@ import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
@@ -78,6 +79,23 @@ class BookshelfFragment : Fragment() {
     // Cloud library dialog components
     private var cloudDialog: AlertDialog? = null
     private var cloudBookAdapter: CloudBookAdapter? = null
+    
+    private var bookToExport: Book? = null
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        uri?.let {
+            bookToExport?.let { book ->
+                try {
+                    requireContext().contentResolver.openOutputStream(it)?.let { stream ->
+                        bookshelfViewModel.exportHighlights(book, stream)
+                        Toast.makeText(requireContext(), "Highlights exported successfully", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(requireContext(), "Export failed", Toast.LENGTH_SHORT).show()
+                    Timber.e(e, "Export failed")
+                }
+            }
+        }
+    }
 
     private val app: Application
         get() = requireContext().applicationContext as Application
@@ -133,10 +151,38 @@ class BookshelfFragment : Fragment() {
                 )
             )
         }
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                bookshelfViewModel.books.collectLatest {
-                    bookshelfAdapter.submitList(it)
+
+        // Observe Reading stats for Goal Widget
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    bookshelfViewModel.todayReadingTimeMs.collectLatest { timeMs ->
+                        updateGoalWidget(timeMs, bookshelfViewModel.dailyGoalTimeMs)
+                    }
+                }
+                launch {
+                    bookshelfViewModel.currentStreak.collectLatest { streak ->
+                        binding.bookshelfStreakCount.text = streak.toString()
+                    }
+                }
+                launch {
+                    bookshelfViewModel.weeklyReadingTimeMs.collectLatest { weeklyMs ->
+                        val hours = weeklyMs / (1000 * 60 * 60)
+                        val minutes = (weeklyMs / (1000 * 60)) % 60
+                        binding.bookshelfWeeklyTime.text = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+                    }
+                }
+                launch {
+                    bookshelfViewModel.totalReadingTimeMs.collectLatest { totalMs ->
+                        val hours = totalMs / (1000 * 60 * 60)
+                        binding.bookshelfTotalTime.text = "${hours}h"
+                    }
+                }
+                launch {
+                    bookshelfViewModel.books.collectLatest { books ->
+                        bookshelfAdapter.submitList(books)
+                        binding.bookshelfBooksCount.text = books.size.toString()
+                    }
                 }
             }
         }
@@ -196,7 +242,10 @@ class BookshelfFragment : Fragment() {
                     when (selected) {
                         0 -> appStoragePickerLauncher.launch("*/*")
                         1 -> sharedStoragePickerLauncher.launch(arrayOf("*/*"))
-                        else -> askForRemoteUrl()
+                        2 -> askForRemoteUrl()
+                        3 -> findNavController().navigate(R.id.action_bookshelfFragment_to_opds)
+                        4 -> askForCalibreUrl()
+                        5 -> startActivity(Intent(requireContext(), com.eqraa.reader.flashcards.FlashcardActivity::class.java))
                     }
                 }
                 .setSingleChoiceItems(R.array.documentSelectorArray, 0) { _, which ->
@@ -467,7 +516,8 @@ class BookshelfFragment : Fragment() {
         val options = arrayOf(
             getString(R.string.upload_to_cloud),
             syncOption,
-            getString(R.string.delete)
+            getString(R.string.delete),
+            "Export Highlights"
         )
 
         MaterialAlertDialogBuilder(requireContext())
@@ -477,6 +527,7 @@ class BookshelfFragment : Fragment() {
                     0 -> uploadBookToCloud(book)
                     1 -> toggleBookSync(book)
                     2 -> confirmDeleteBook(book)
+                    3 -> exportHighlights(book)
                 }
             }
             .show()
@@ -569,6 +620,14 @@ class BookshelfFragment : Fragment() {
         }
     }
 
+
+
+    private fun exportHighlights(book: Book) {
+        bookToExport = book
+        val filename = "${book.title ?: "highlights"}.md"
+        exportLauncher.launch(filename)
+    }
+
     @OptIn(DelicateReadiumApi::class)
     private fun askForRemoteUrl() {
         val urlEditText = EditText(requireContext())
@@ -589,6 +648,95 @@ class BookshelfFragment : Fragment() {
                 bookshelfViewModel.addPublicationFromWeb(url)
             }
             .show()
+    }
+
+    private fun askForCalibreUrl() {
+        // Layout:
+        // [ EditText (IP:Port) ]
+        // [ ProgressBar (Hidden) ]
+        // [ RecyclerView (Results) ]
+        
+        val context = requireContext()
+        val layout = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(
+                (16 * resources.displayMetrics.density).toInt(),
+                (16 * resources.displayMetrics.density).toInt(),
+                (16 * resources.displayMetrics.density).toInt(),
+                0
+            )
+        }
+
+        val editText = android.widget.EditText(context).apply {
+            setText("192.168.1.")
+            setSelection(text.length)
+            hint = "e.g. 192.168.1.10:8080"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        layout.addView(editText)
+
+        val statusText = android.widget.TextView(context).apply {
+            text = "Scanning for local servers..."
+            textSize = 12f
+            setPadding(0, 16, 0, 16)
+        }
+        layout.addView(statusText)
+        
+        // Simple list for discovered servers
+        val serverListLayout = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        layout.addView(serverListLayout)
+
+        val dialog = MaterialAlertDialogBuilder(context)
+            .setTitle("Connect to Calibre")
+            .setView(layout)
+            .setPositiveButton("Connect") { _, _ ->
+                processCalibreConnect(editText.text.toString())
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .create()
+
+        dialog.show()
+        
+        // Start Discovery
+        val discovery = com.eqraa.reader.opds.CalibreDiscovery(context)
+        val job = lifecycleScope.launch {
+            discovery.discover().collect { servers ->
+                serverListLayout.removeAllViews()
+                if (servers.isNotEmpty()) {
+                    statusText.text = "Found ${servers.size} server(s):"
+                    servers.forEach { server ->
+                         val chip = com.google.android.material.chip.Chip(context).apply {
+                             text = "${server.name} (${server.host})"
+                             setOnClickListener {
+                                 editText.setText("${server.host}:${server.port}")
+                             }
+                         }
+                         serverListLayout.addView(chip)
+                    }
+                } else {
+                    statusText.text = "Scanning..."
+                }
+            }
+        }
+        
+        dialog.setOnDismissListener { job.cancel() }
+    }
+    
+    private fun processCalibreConnect(inputUrl: String) {
+        var url = inputUrl.trim()
+        if (url.isNotEmpty()) {
+            if (!url.endsWith("/opds") && !url.contains("/opds")) {
+               if (!url.contains("/")) {
+                   url = "$url/opds"
+               }
+            }
+            val bundle = Bundle().apply { putString("url", url) }
+            findNavController().navigate(R.id.action_bookshelfFragment_to_opds, bundle)
+        } else {
+             Toast.makeText(requireContext(), "Please enter a valid URL", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun handleEvent(event: BookshelfViewModel.Event) {
@@ -637,6 +785,16 @@ class BookshelfFragment : Fragment() {
             }
             .show()
     }
+    private fun updateGoalWidget(timeMs: Long, goalMs: Long) {
+        val minutes = timeMs / (1000 * 60)
+        val goalMinutes = goalMs / (1000 * 60)
+        val percentage = if (goalMs > 0) (timeMs.toDouble() / goalMs * 100).toInt().coerceAtMost(100) else 0
+
+        binding.bookshelfDailyProgressBar.progress = percentage
+        binding.bookshelfDailyTargetText.text = "$minutes of $goalMinutes minutes read"
+        binding.bookshelfDailyPercentageText.text = "$percentage%"
+    }
+
     private fun updateSyncIndicator(status: SyncStatus) {
         val icon = binding.bookshelfCloudSync
         val progress = binding.bookshelfSyncProgress

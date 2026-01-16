@@ -11,6 +11,8 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.readium.r2.shared.util.AbsoluteUrl
 import org.readium.r2.shared.util.toUrl
@@ -26,6 +28,21 @@ class BookshelfViewModel(application: Application) : AndroidViewModel(applicatio
 
     val channel = EventChannel(Channel<Event>(Channel.BUFFERED), viewModelScope)
     val books = app.bookRepository.books()
+
+    // --- Stats & Goals ---
+    private val statsRepository = app.statsRepository
+    
+    val todayReadingTimeMs = statsRepository.activityForLast7Days().map { it.lastOrNull() ?: 0L }
+    val currentStreak = kotlinx.coroutines.flow.flow { 
+        emit(statsRepository.currentStreak()) 
+    }
+    val weeklyReadingTimeMs = statsRepository.readingTimeThisWeekMs()
+    val totalReadingTimeMs = statsRepository.totalReadingTimeMs()
+    
+    // Default goal: 30 minutes
+    val dailyGoalTimeMs = 30 * 60 * 1000L 
+
+    // --- Actions ---
 
     fun deletePublication(book: Book) =
         viewModelScope.launch {
@@ -73,6 +90,25 @@ class BookshelfViewModel(application: Application) : AndroidViewModel(applicatio
             // We should use book.id
             book.id?.let { id ->
                  database.booksDao().updateBookSyncStatus(id, book.isSynced)
+            }
+        }
+
+        }
+
+    fun exportHighlights(book: Book, outputStream: java.io.OutputStream) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val bookId = book.id ?: return@launch
+                // Highlights is a Flow, get first emission
+                val highlights = app.bookRepository.highlightsForBook(bookId).first()
+                
+                val markdown = com.eqraa.reader.utils.MarkdownExporter.generateMarkdown(book, highlights)
+                
+                outputStream.use { stream ->
+                    stream.write(markdown.toByteArray())
+                }
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Failed to export highlights")
             }
         }
     }

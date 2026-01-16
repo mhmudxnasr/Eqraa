@@ -65,6 +65,8 @@ data class Highlight(
     var text: Locator.Text = Locator.Text(),
     @ColumnInfo(name = ANNOTATION, defaultValue = "")
     var annotation: String = "",
+    @ColumnInfo(name = "CLOUD_ID")
+    var cloudId: String? = null,
 ) {
 
     constructor(
@@ -125,6 +127,7 @@ data class Highlight(
         const val LOCATIONS = "LOCATIONS"
         const val TEXT = "TEXT"
         const val ANNOTATION = "ANNOTATION"
+        const val CLOUD_ID = "CLOUD_ID"
     }
 }
 

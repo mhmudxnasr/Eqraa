@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -35,7 +36,8 @@ fun AiAssistantOverlay(
     onDismiss: () -> Unit,
     onSummarizeChapter: () -> Unit = {},
     onExplainSymbolism: () -> Unit = {},
-    onAskQuestion: (String) -> Unit = {}
+    onAskQuestion: (String) -> Unit = {},
+    initialAction: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -47,6 +49,24 @@ fun AiAssistantOverlay(
     var aiResponse by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var showResponse by remember { mutableStateOf(false) }
+
+    // Auto-trigger initial action
+    LaunchedEffect(initialAction) {
+        if (initialAction != null) {
+            showResponse = true
+            isLoading = true
+            aiResponse = ""
+            val result = when(initialAction) {
+                // Map "ExplainArabic" to translateToArabic for the structured output
+                "ExplainArabic" -> aiService.translateToArabic(text) 
+                "Summarize" -> aiService.summarizeChapter(text, bookTitle, chapterTitle)
+                "Explain" -> aiService.breakDownSelection(text, bookTitle, chapterTitle)
+                else -> Result.failure(Exception("Unknown"))
+            }
+            aiResponse = result.getOrElse { "Operation failed." }
+            isLoading = false
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -116,7 +136,7 @@ fun AiAssistantOverlay(
                             isLoading = true
                             aiResponse = ""
                             val result = when(actionType) {
-                                "ExplainArabic" -> aiService.explainInArabic(text, bookTitle, chapterTitle)
+                                "ExplainArabic" -> aiService.translateToArabic(text)
                                 "Summarize" -> aiService.summarizeChapter(text, bookTitle, chapterTitle)
                                 "Explain" -> aiService.breakDownSelection(text, bookTitle, chapterTitle)
                                 else -> Result.failure(Exception("Unknown"))
@@ -137,9 +157,26 @@ private fun FloatingResponseCard(
     isLoading: Boolean,
     providerIcon: ImageVector
 ) {
+    // Typewriter effect: display characters one by one
+    var displayedText by remember { mutableStateOf("") }
+    var lastResponse by remember { mutableStateOf("") }
+    
+    LaunchedEffect(response) {
+        if (response != lastResponse && response.isNotEmpty() && !isLoading) {
+            lastResponse = response
+            displayedText = ""
+            response.forEachIndexed { index, _ ->
+                kotlinx.coroutines.delay(15) // 15ms per character
+                displayedText = response.substring(0, index + 1)
+            }
+        } else if (isLoading) {
+            displayedText = ""
+        }
+    }
+    
     Card(
         shape = RoundedCornerShape(20.dp),
-        backgroundColor = Color(0xFFF2F2F2), // Slightly off-white like paper
+        backgroundColor = Color(0xFFF2F2F2),
         elevation = 12.dp,
         modifier = Modifier
             .fillMaxWidth(0.85f)
@@ -152,29 +189,58 @@ private fun FloatingResponseCard(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Centered Icon
+            // Top Centered Icon with pulse animation
+            val infiniteTransition = rememberInfiniteTransition(label = "icon_pulse")
+            val iconScale by infiniteTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = if (isLoading) 1.15f else 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(600),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "icon_scale"
+            )
+            
             Icon(
                 imageVector = providerIcon,
                 contentDescription = null,
                 tint = Color.Black,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier
+                    .size(28.dp)
+                    .graphicsLayer(scaleX = iconScale, scaleY = iconScale)
             )
             
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isLoading) {
-                CircularProgressIndicator(
-                    color = Color.Black,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(24.dp)
+                // Animated loading dots
+                val dotCount by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 3f,
+                    animationSpec = infiniteRepeatable(tween(800)),
+                    label = "dots"
+                )
+                Text(
+                    text = "Thinking" + ".".repeat(dotCount.toInt() + 1),
+                    fontSize = 16.sp,
+                    color = Color.Gray,
+                    fontFamily = FontFamily.SansSerif
                 )
             } else {
+                // Typewriter text with cursor blink
+                val showCursor by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(500), RepeatMode.Reverse),
+                    label = "cursor"
+                )
+                
                 Text(
-                    text = response,
+                    text = displayedText + if (displayedText.length < response.length) "▌" else "",
                     fontSize = 17.sp,
                     lineHeight = 28.sp,
                     color = Color.Black,
-                    fontFamily = FontFamily.Serif, // Serif font as requested
+                    fontFamily = FontFamily.Serif,
                     letterSpacing = 0.5.sp
                 )
             }

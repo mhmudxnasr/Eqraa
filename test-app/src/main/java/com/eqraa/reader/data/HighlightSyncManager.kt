@@ -60,7 +60,9 @@ class HighlightSyncManager(
     }
     
     private val supabase by lazy { SupabaseService.client }
+
     private val syncDao = AppDatabase.getDatabase(context).syncDao()
+    private val booksDao = AppDatabase.getDatabase(context).booksDao()
     private val database = AppDatabase.getDatabase(context)
     
     // Sync state
@@ -79,11 +81,21 @@ class HighlightSyncManager(
      */
     suspend fun queueHighlightSync(highlight: Highlight) {
         try {
+            // Ensure cloud_id exists before syncing
+            if (highlight.cloudId == null) {
+                val newCloudId = java.util.UUID.randomUUID().toString()
+                highlight.cloudId = newCloudId
+                // Update local DB immediately so we don't generate another one later
+                // We don't have a direct "updateCloudId" but we have updateHighlightStyle/Annotation
+                // or just insert (REPLACE). `insertHighlight` is REPLACE.
+                booksDao.insertHighlight(highlight)
+            }
+
             val dto = highlightToDto(highlight)
             val payload = Json.encodeToString(dto)
             
             // Check for existing action for this highlight
-            val key = "${highlight.bookId}_${highlight.id}"
+            val key = "${highlight.bookId}_${highlight.cloudId}" // Use cloud_id for key stability
             val existing = syncDao.getActionByTarget(TYPE_HIGHLIGHT, key)
             
             if (existing != null) {
@@ -104,7 +116,7 @@ class HighlightSyncManager(
             
             // Trigger worker
             SyncWorker.enqueue(context)
-            Timber.d("HighlightSyncManager: Queued sync for highlight ${highlight.id}")
+            Timber.d("HighlightSyncManager: Queued sync for highlight ${highlight.id} (cloud: ${highlight.cloudId})")
             
         } catch (e: Exception) {
             Timber.e(e, "HighlightSyncManager: Failed to queue highlight sync")
@@ -185,23 +197,55 @@ class HighlightSyncManager(
     /**
      * Full sync: Download all highlights from cloud and merge with local.
      */
+    /**
+     * Full sync: Download all highlights from cloud and merge with local.
+     * Uses a new approach: fetch ALL user highlights and match them to local books.
+     */
     suspend fun fullSync(bookId: String): Int = withContext(Dispatchers.IO) {
         try {
             _syncState.value = SyncState.Syncing
             
-            val cloudHighlights = supabase.from("highlights").select {
+            // Fetch ALL highlights for this user (not filtered by book)
+            val allUserHighlights = supabase.from("highlights").select {
                 filter { 
-                    eq("book_id", bookId)
                     eq("deleted", false)
                 }
             }.decodeList<HighlightDto>()
             
-            // TODO: Merge with local database
-            // For now, just log the count
+            var mergedCount = 0
+            for (dto in allUserHighlights) {
+                try {
+                    // Try to find which local book this highlight belongs to
+                    // It could have either global ID or legacy local ID
+                    val localBookId = booksDao.getBookIdByIdentifier(dto.bookId) 
+                        ?: dto.bookId.toLongOrNull() // Fallback for legacy local IDs
+                    
+                    if (localBookId == null) {
+                        // Book doesn't exist on this device, skip
+                        continue
+                    }
+                    
+                    val local = booksDao.getHighlightByCloudId(dto.id)
+                    if (local == null) {
+                        // Insert new
+                        booksDao.insertHighlight(dtoToHighlight(dto, localBookId))
+                        mergedCount++
+                    } else {
+                        // Update if remote is newer
+                        if (dto.timestamp > (local.creation ?: 0L)) {
+                           val updated = dtoToHighlight(dto, localBookId).copy(id = local.id)
+                           booksDao.insertHighlight(updated)
+                           mergedCount++
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to merge highlight ${dto.id}")
+                }
+            }
             
-            _syncState.value = SyncState.Success(cloudHighlights.size)
-            Timber.d("HighlightSyncManager: Full sync complete, ${cloudHighlights.size} highlights")
-            cloudHighlights.size
+            _syncState.value = SyncState.Success(mergedCount)
+            Timber.d("HighlightSyncManager: Full sync complete. Total highlights: ${allUserHighlights.size}, Merged/Updated: $mergedCount")
+            mergedCount
             
         } catch (e: Exception) {
             Timber.e(e, "HighlightSyncManager: Full sync failed")
@@ -210,18 +254,24 @@ class HighlightSyncManager(
         }
     }
     
-    private fun highlightToDto(highlight: Highlight): HighlightDto {
+    // Mapping Helpers
+    
+    private suspend fun highlightToDto(highlight: Highlight): HighlightDto {
         val cfi = highlight.locations.fragments.firstOrNull()
             ?: highlight.locations.otherLocations["cssSelector"]?.toString()
         
         val userId = supabase.auth.currentSessionOrNull()?.user?.id 
-            ?: throw IllegalStateException("User must be logged in to sync highlights")
+            ?: "pending_user"
             
+        // Fetch global identifier for the book
+        val globalBookId = booksDao.getIdentifierByBookId(highlight.bookId) 
+            ?: highlight.bookId.toString() // Fallback (shouldn't happen if DB consistent)
+
         return HighlightDto(
-            id = java.util.UUID.randomUUID().toString(), // Generate cloud ID
+            id = highlight.cloudId ?: java.util.UUID.randomUUID().toString(),
             userId = userId,
             localId = highlight.id,
-            bookId = highlight.bookId.toString(),
+            bookId = globalBookId,
             href = highlight.href,
             cfi = cfi,
             style = highlight.style.value,
@@ -233,5 +283,42 @@ class HighlightSyncManager(
             totalProgression = highlight.totalProgression,
             timestamp = highlight.creation ?: System.currentTimeMillis()
         )
+    }
+
+    private fun dtoToHighlight(dto: HighlightDto, bookId: Long): Highlight {
+        // We need to reconstruct Locator
+        // This is tricky without the full Locator JSON structure. 
+        // We have separate fields (href, cfi, text...). 
+        // We can build a basic Locator.
+        
+        val locations = org.readium.r2.shared.publication.Locator.Locations(
+            fragments = listOfNotNull(dto.cfi),
+            progression = dto.totalProgression,
+            otherLocations = emptyMap() // We lost CSS selector if it was there?
+        )
+        
+        val text = org.readium.r2.shared.publication.Locator.Text(
+            before = dto.textBefore,
+            highlight = dto.textHighlight,
+            after = dto.textAfter
+        )
+        
+        val locator = org.readium.r2.shared.publication.Locator(
+            href = org.readium.r2.shared.util.Url(dto.href)!!,
+            mediaType = org.readium.r2.shared.util.mediatype.MediaType.BINARY, // Default/Unknown
+            locations = locations,
+            text = text
+        )
+
+        return Highlight(
+           bookId = bookId,
+           style = Highlight.Style.getOrDefault(dto.style),
+           tint = dto.color,
+           locator = locator,
+           annotation = dto.annotation ?: ""
+        ).apply {
+            creation = dto.timestamp
+            cloudId = dto.id
+        }
     }
 }

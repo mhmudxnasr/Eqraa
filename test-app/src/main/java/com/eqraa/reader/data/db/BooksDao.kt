@@ -40,6 +40,12 @@ interface BooksDao {
     @Query("SELECT * FROM " + Book.TABLE_NAME + " WHERE " + Book.ID + " = :id")
     suspend fun get(id: Long): Book?
 
+    @Query("SELECT identifier FROM books WHERE id = :id")
+    suspend fun getIdentifierByBookId(id: Long): String?
+
+    @Query("SELECT id FROM books WHERE identifier = :identifier")
+    suspend fun getBookIdByIdentifier(identifier: String): Long?
+
     /**
      * Retrieve all books
      * @return List of books as Flow
@@ -68,6 +74,12 @@ interface BooksDao {
      */
     @Query("SELECT * FROM ${Highlight.TABLE_NAME} WHERE ${Highlight.ID} = :highlightId")
     suspend fun getHighlightById(highlightId: Long): Highlight?
+
+    /**
+     * Retrieves the highlight by Cloud ID.
+     */
+    @Query("SELECT * FROM ${Highlight.TABLE_NAME} WHERE CLOUD_ID = :cloudId")
+    suspend fun getHighlightByCloudId(cloudId: String): Highlight?
 
     /**
      * Inserts a bookmark
@@ -104,8 +116,17 @@ interface BooksDao {
     /**
      * Deletes a bookmark
      */
-    @Query("DELETE FROM " + Bookmark.TABLE_NAME + " WHERE " + Bookmark.ID + " = :id")
+    @Query("DELETE FROM ${Bookmark.TABLE_NAME} WHERE ${Bookmark.ID} = :id")
     suspend fun deleteBookmark(id: Long)
+
+    @Query("SELECT * FROM ${Bookmark.TABLE_NAME} WHERE ${Bookmark.ID} = :id")
+    suspend fun getBookmarkById(id: Long): Bookmark?
+
+    /**
+     * Retrieves the bookmark by Cloud ID.
+     */
+    @Query("SELECT * FROM ${Bookmark.TABLE_NAME} WHERE CLOUD_ID = :cloudId")
+    suspend fun getBookmarkByCloudId(cloudId: String): Bookmark?
 
     /**
      * Deletes the highlight with given id.
@@ -114,14 +135,21 @@ interface BooksDao {
     suspend fun deleteHighlight(id: Long)
 
     /**
-     * Saves book progression
+     * Saves book progression with timestamp
      * @param locator Location of the book
+     * @param timestamp When this progress was made (milliseconds)
      * @param id The book to update
      */
     @Query(
-        "UPDATE " + Book.TABLE_NAME + " SET " + Book.PROGRESSION + " = :locator WHERE " + Book.ID + "= :id"
+        "UPDATE " + Book.TABLE_NAME + " SET " + Book.PROGRESSION + " = :locator, " + Book.UPDATED_AT + " = :timestamp WHERE " + Book.ID + "= :id"
     )
-    suspend fun saveProgression(locator: String, id: Long)
+    suspend fun saveProgression(locator: String, timestamp: Long, id: Long)
+
+    /**
+     * Gets the last progression timestamp for a book
+     */
+    @Query("SELECT " + Book.UPDATED_AT + " FROM " + Book.TABLE_NAME + " WHERE " + Book.ID + " = :id")
+    suspend fun getProgressionTimestamp(id: Long): Long?
 
     @Query("UPDATE books SET is_synced = :isSynced WHERE id = :id")
     suspend fun updateBookSyncStatus(id: Long, isSynced: Boolean)

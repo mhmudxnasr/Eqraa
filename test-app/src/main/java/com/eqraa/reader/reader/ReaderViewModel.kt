@@ -8,6 +8,7 @@
 
 package com.eqraa.reader.reader
 
+import android.content.Context
 import android.graphics.Color
 import androidx.annotation.ColorInt
 import androidx.lifecycle.ViewModel
@@ -62,18 +63,22 @@ import com.eqraa.reader.utils.UserError
 import com.eqraa.reader.utils.createViewModelFactory
 import com.eqraa.reader.utils.extensions.toHtml
 import com.eqraa.reader.utils.CFICompressor
+import com.eqraa.reader.data.ReadingSessionManager
 import timber.log.Timber
 
 @OptIn(ExperimentalReadiumApi::class)
 class ReaderViewModel(
     val bookId: Long,
     private val bookIdentifier: String,
+    private val context: Context,
     private val readerRepository: ReaderRepository,
     private val bookRepository: BookRepository,
     private val readingProgressRepository: ReadingProgressRepository,
     private val readingSyncManager: ReadingSyncManager?,
     private val backupManager: BackupManager?,
     private val realtimeSyncManager: RealtimeSyncManager?,
+    private val statsRepository: com.eqraa.reader.data.StatsRepository,
+    private val wordCardDao: com.eqraa.reader.data.db.WordCardDao
 ) : ViewModel(),
     EpubNavigatorFragment.Listener,
     ImageNavigatorFragment.Listener,
@@ -116,31 +121,80 @@ class ReaderViewModel(
         readerInitData = readerInitData
     )
 
-    val syncState: StateFlow<BackupManager.SyncState> = 
-        backupManager?.syncState ?: MutableStateFlow(BackupManager.SyncState.Idle)
-
+    // Initialize ReadingSessionManager
+    private val readingSessionManager = if (readingSyncManager != null) {
+        ReadingSessionManager(
+            readingProgressRepository = readingProgressRepository,
+            readingSyncManager = readingSyncManager,
+            scope = viewModelScope
+        )
+    } else {
+        null
+    }
+    
+    val currentLocator: StateFlow<Locator?> get() = _currentLocator
     private val _currentLocator = MutableStateFlow<Locator?>(null)
-    val currentLocator: StateFlow<Locator?> = _currentLocator.asStateFlow()
 
-    val currentPosition: Flow<Int?> = currentLocator.map { it?.locations?.position }
+    val totalPositions: StateFlow<Int> get() = _totalPositions
     private val _totalPositions = MutableStateFlow(0)
-    val totalPositions: StateFlow<Int> = _totalPositions.asStateFlow()
+    
+    val currentPosition: StateFlow<Int?> get() = _currentPosition
+    private val _currentPosition = MutableStateFlow<Int?>(null)
 
-    private var lastSavedLocator: Locator? = null
+    // Sync Status for UI
+    val readingSyncStatus = readingSyncManager?.syncStatus
+        ?: MutableStateFlow(ReadingSyncManager.SyncStatus.Idle)
+
 
     init {
-        // Initialize lastSavedLocator with the initial location to prevent 
-        // immediate "save" triggering a timestamp update on open.
-        if (readerInitData is VisualReaderInitData) {
-             lastSavedLocator = readerInitData.initialLocation
-        }
-
         viewModelScope.launch {
             _totalPositions.value = publication.positions().size
         }
         subscribeToRealtimeEvents()
         observeSyncManagerUpdates()
+        observeSessionState()
+        
+        // Start "Safe Start" Handshake
+        readingSessionManager?.initializeSession(bookId, syncIdentifier)
+        
+        // Trigger highlight and bookmark sync on open
+        viewModelScope.launch {
+            try {
+                bookRepository.highlightSyncManager?.fullSync(syncIdentifier)
+                bookRepository.bookmarkSyncManager?.fullSync(syncIdentifier)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to sync highlights/bookmarks on open")
+            }
+        }
     }
+    
+    private fun observeSessionState() = viewModelScope.launch {
+        readingSessionManager?.state?.collect { state ->
+            when (state) {
+                is ReadingSessionManager.SessionState.Conflict -> {
+                    Timber.d("⚠️ Conflict detected via SessionManager")
+                    // Show conflict dialog or auto-resolve based on heuristic?
+                    // For "New Device" scenario (Remote > Local), we usually want to Auto-Jump or Prompt.
+                    // The ReadingSessionManager has actually already BLOCKED saves.
+                    // Let's prompt the user.
+                    activityChannel.send(ActivityCommand.ShowConflictDialog(state.local, state.remote))
+                }
+                is ReadingSessionManager.SessionState.Synced -> {
+                    // Update UI status to "Synced"
+                }
+                is ReadingSessionManager.SessionState.Syncing -> {
+                    // Update UI status to "Syncing..."
+                }
+                else -> {}
+            }
+        }
+    }
+
+    
+    // Stats
+    val totalReadingTime = statsRepository.totalReadingTimeMs()
+    val weeklyActivity = statsRepository.activityForLast7Days()
+    val currentStreak = kotlinx.coroutines.flow.flow { emit(statsRepository.currentStreak()) }
 
     private fun observeSyncManagerUpdates() = viewModelScope.launch {
         readingSyncManager?.remoteProgressFlow?.collect { progress ->
@@ -155,8 +209,6 @@ class ReaderViewModel(
         }
     }
 
-    private var lastLocalUpdate: Long = 0
-
     private fun subscribeToRealtimeEvents() = viewModelScope.launch {
         realtimeSyncManager?.events?.collect { event ->
             when (event) {
@@ -167,147 +219,64 @@ class ReaderViewModel(
     }
 
     fun checkRemoteProgress(showDialog: Boolean = true) = viewModelScope.launch {
-        try {
-            val identifier = syncIdentifier
-            val remote = readingProgressRepository.getRemoteProgress(identifier) ?: return@launch
-            
-            // 1. Get truly persistent local state
-            val localState = readingProgressRepository.getLocalProgress(bookId)
-            val storedLocalTimestamp = localState?.second ?: 0L
-            
-            // 2. Determine effective local timestamp (session vs stored)
-            val effectiveLocalTimestamp = if (lastLocalUpdate > storedLocalTimestamp) lastLocalUpdate else storedLocalTimestamp
-            
-            val currentId = readingSyncManager?.deviceId
-
-            // 3. Conflict Check
-            // We have a conflict if Remote is NEWER than Local AND from a DIFFERENT device.
-            // If Local is 0 (fresh install), we usually don't consider it a "conflict" unless we want to confirm before jumping.
-            // But if we have stored local state, and remote is newer...
-            
-            val isRemoteNewer = remote.timestamp > effectiveLocalTimestamp
-            val isDifferentDevice = remote.deviceId != currentId
-            
-            if (isRemoteNewer && isDifferentDevice) {
-                 Timber.d("Sync conflict detected. Remote: ${remote.timestamp} vs Local: $effectiveLocalTimestamp")
-                 
-                 // Construct local position object for comparison
-                 // Try to resolve from current session locator first, then stored cfi
-                 val localCfi = _currentLocator.value?.toJSON()?.toString() ?: localState?.first
-                 
-                 var localPositionObject: ReadingPosition? = null
-                 
-                 if (localCfi != null) {
-                     try {
-                         val locator = Locator.fromJSON(org.json.JSONObject(localCfi))
-                         if (locator != null) {
-                             localPositionObject = ReadingPosition(
-                                 bookId = identifier,
-                                 cfi = localCfi,
-                                 percentage = (locator.locations.totalProgression ?: 0.0).toFloat(),
-                                 timestamp = effectiveLocalTimestamp,
-                                 deviceId = currentId,
-                                 pageNumber = locator.locations.position,
-                                 totalPages = _totalPositions.value
-                             )
-                         }
-                     } catch (e: Exception) { Timber.e(e, "Failed to parse local cfi") }
-                 }
-
-                 if (showDialog) {
-                     // If we have NO local state (fresh install), usually we just Sync Detected (Prompt).
-                     // If we have local state, we show Conflict Dialog.
-                     if (storedLocalTimestamp > 0 || lastLocalUpdate > 0) {
-                        activityChannel.send(ActivityCommand.ShowConflictDialog(localPositionObject, remote))
-                     } else {
-                        // First time open? Just prompt normally or auto-sync?
-                        // User request: "First time on new device: No conflict, just sync down"
-                        // But we still want to inform user "Hey we found progress". 
-                        // Prompting "Jump" is safer.
-                        activityChannel.send(ActivityCommand.SyncDetected(remote.cfi, remote.percentage))
-                     }
-                 }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to check remote progress")
-            // Requirement: "Show subtle banner: Offline mode - progress will sync when connected"
-            // For now, logging and treating as local-only flow.
-            // Ideally, we'd emit a state to the Activity to show a Snackbar.
-            activityChannel.send(
-                ActivityCommand.ToastError(
-                   com.eqraa.reader.utils.UserError(R.string.offline_mode_message, cause = null)
-                )
-            )
-        }
+        // Obsolete: ReadingSessionManager handles this via "Handshake"
+        // But we might want gracefully handle manual checks here?
+        // For now, let's just log.
+        Timber.d("Manual check delegated to SessionManager (Active)")
     }
 
     fun applyRemoteProgress(remote: ReadingPosition) = viewModelScope.launch {
-         Timber.d("Applying remote progress: ${remote.cfi}")
-         // Also update local storage so we don't prompt again immediately
-         readingProgressRepository.saveProgress(
-             bookId = bookId,
-             bookIdentifier = syncIdentifier,
-             cfi = remote.cfi,
-             percentage = remote.percentage,
-             pageNumber = remote.pageNumber
-         )
+        Timber.d("Applying remote progress: ${remote.cfi}")
+        readingSessionManager?.resolveConflict(useRemote = true, remotePosition = remote)
+        
+        // This will update local DB via SessionManager or we do it here?
+        // SessionManager should handle it, or we do it here and notify SessionManager.
+        // Let's do it here to ensure UI update immediately
+        readingProgressRepository.saveProgressLocally(
+            bookId = bookId,
+            cfi = remote.cfi,
+            timestamp = remote.timestamp
+        )
+         // Also save hash to prevent duplicate save detection
+        val hash = remote.cfi.hashCode()
+        saveLastSavedLocatorHash(bookId, hash)
+    }
+    
+    private fun applyRemoteProgressSilently(remote: ReadingPosition) {
+         // Moved to SessionManager or kept for quick internal use?
+         // For now, let's remove as SessionManager handles handshake.
     }
 
     fun forceLocalProgress() = viewModelScope.launch {
-        val locator = _currentLocator.value ?: return@launch
         Timber.d("Forcing local progress override")
-        // Just trigger a save, which will push to cloud with new timestamp
-        saveProgression(locator)
+        readingSessionManager?.resolveConflict(useRemote = false, remotePosition = null)
+        val locator = _currentLocator.value ?: return@launch
+        saveProgression(locator, forceImmediate = true)
     }
 
     override fun onCleared() {
-        // When the ReaderViewModel is disposed of, we want to close the publication to avoid
-        // using outdated information (such as the initial location) if the `ReaderActivity` is
-        // opened again with the same book.
+        // Force sync any pending progress before closing
+        readingSessionManager?.onCleanup()
         readerRepository.close(bookId)
     }
 
-    fun saveProgression(locator: Locator) {
-        // Prevent duplicate saves (especially on initial load)
-        if (locator == lastSavedLocator) {
-             Timber.v("Ignoring duplicate save progression for $bookId")
-             return
-        }
-        lastSavedLocator = locator
-        
+    fun saveProgression(locator: Locator, forceImmediate: Boolean = false) {
+        // Delegate to ReadingSessionManager
         _currentLocator.value = locator
-        viewModelScope.launch {
-        Timber.v("Saving locator for book $bookId: $locator.")
-        lastLocalUpdate = System.currentTimeMillis()
         
-        try {
-            val cfi = locator.toJSON().toString()
-            val percentage = (locator.locations.totalProgression ?: 0.0).toFloat()
-            val identifier = syncIdentifier
-            
-            // 1. Legacy/Local Save (Room)
-            readingProgressRepository.saveProgress(
-                bookId = bookId,
-                bookIdentifier = identifier,
-                cfi = cfi,
-                percentage = percentage,
-                pageNumber = locator.locations.position
-            )
-
-            // 2. New Sync Manager (Supabase with Debounce)
-            Timber.v("ReaderViewModel: Syncing to Cloud for $identifier")
-            readingSyncManager?.updateProgress(
-                bookId = identifier,
-                cfi = cfi,
-                percentage = percentage,
-                pageNumber = locator.locations.position
-            )
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to save progression")
+        if (readingSessionManager != null) {
+            readingSessionManager.onPageChanged(locator)
+        } else {
+            // Fallback for offline/no-sync scenario (should rare)
+             viewModelScope.launch {
+                readingProgressRepository.saveProgressLocally(
+                    bookId = bookId,
+                    cfi = locator.toJSON().toString(),
+                    timestamp = System.currentTimeMillis()
+                )
+             }
         }
     }
-}
 
 
     fun syncBook() = viewModelScope.launch {
@@ -546,12 +515,39 @@ class ReaderViewModel(
         object BookmarkFailed : FragmentFeedback()
     }
 
+    private fun saveLastSavedLocatorHash(bookId: Long, hash: Int) {
+        val prefs = context.getSharedPreferences("reader_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putInt("last_saved_hash_$bookId", hash).apply()
+    }
+
     sealed class VisualFragmentCommand {
         class ShowPopup(val text: CharSequence) : VisualFragmentCommand()
     }
 
     sealed class SearchCommand {
         object StartNewSearch : SearchCommand()
+    }
+
+    fun saveWordCard(word: String, definition: String = "", contextSentence: String = "") = viewModelScope.launch {
+        try {
+            val existing = wordCardDao.getCardByWord(word)
+            if (existing == null) {
+                wordCardDao.insert(
+                    com.eqraa.reader.data.model.WordCard(
+                        word = word,
+                        definition = definition,
+                        contextSentence = contextSentence,
+                        translation = null,
+                        sourceBookId = bookId
+                    )
+                )
+                Timber.d("Saved word card: $word")
+            } else {
+                Timber.d("Word card already exists: $word")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to save word card")
+        }
     }
 
     companion object {
@@ -562,15 +558,22 @@ class ReaderViewModel(
                 val readingSyncManager = application.readingSyncManager
                 val backupManager = application.backupManager
                 val realtimeSyncManager = application.realtimeSyncManager
+                val statsRepository = application.statsRepository
+                // Get DAO from database
+                val wordCardDao = com.eqraa.reader.data.db.AppDatabase.getDatabase(application).wordCardDao()
+                
                 ReaderViewModel(
                     arguments.bookId,
                     bookIdentifier,
+                    application.applicationContext,
                     application.readerRepository,
                     application.bookRepository,
                     readingProgressRepository,
                     readingSyncManager,
                     backupManager,
-                    realtimeSyncManager
+                    realtimeSyncManager,
+                    statsRepository,
+                    wordCardDao
                 )
             }
     }

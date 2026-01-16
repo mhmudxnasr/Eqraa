@@ -497,7 +497,7 @@ public class EpubPreferencesEditor internal constructor(
         (preferences.hyphens != null || state.settings.textAlign == TextAlign.JUSTIFY)
 
     private fun isLetterSpacingEffective() = layout == EpubLayout.REFLOWABLE &&
-        state.layout.stylesheets == Layout.Stylesheets.Default &&
+        state.layout.stylesheets in listOf(Layout.Stylesheets.Default, Layout.Stylesheets.Rtl) &&
         !state.settings.publisherStyles &&
         preferences.letterSpacing != null
 
@@ -517,7 +517,7 @@ public class EpubPreferencesEditor internal constructor(
         preferences.textAlign != null
 
     private fun isWordSpacingEffective(): Boolean = layout == EpubLayout.REFLOWABLE &&
-        state.layout.stylesheets == Layout.Stylesheets.Default &&
+        state.layout.stylesheets in listOf(Layout.Stylesheets.Default, Layout.Stylesheets.Rtl) &&
         !state.settings.publisherStyles &&
         preferences.wordSpacing != null
 }

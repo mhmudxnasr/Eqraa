@@ -37,10 +37,22 @@ class BookshelfAdapter(
         )
     }
 
+    private var lastPosition = -1
+
     override fun onBindViewHolder(viewHolder: ViewHolder, position: Int) {
         val book = getItem(position)
-
         viewHolder.bind(book)
+        setAnimation(viewHolder.itemView, position)
+    }
+
+    private fun setAnimation(viewToAnimate: View, position: Int) {
+        if (position > lastPosition) {
+            val animation = android.view.animation.AnimationUtils.loadAnimation(viewToAnimate.context, R.anim.item_animation_fall_down)
+            // Use longer delay for a more dramatic staggered entrance
+            animation.startOffset = (position * 100).toLong().coerceAtMost(800) 
+            viewToAnimate.startAnimation(animation)
+            lastPosition = position
+        }
     }
 
     inner class ViewHolder(private val binding: ItemRecycleBookBinding) :
@@ -64,17 +76,35 @@ class BookshelfAdapter(
             }
             
             binding.progressBar.post {
-                val parentWidth = (binding.progressBar.parent as View).width
+                val parentWidth = (binding.progressBar.parent as android.view.View).width
                 val params = binding.progressBar.layoutParams
                 params.width = (parentWidth * progress).toInt()
                 binding.progressBar.layoutParams = params
             }
             
-            binding.root.singleClick {
-                onBookClick(book)
-            }
+            // Scale and Click Handling
+            setupScaleClick(book)
+            
             binding.root.setOnLongClickListener {
                 onBookLongClick(book)
+                true
+            }
+        }
+
+        private fun setupScaleClick(book: Book) {
+            binding.root.setOnTouchListener { view, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> {
+                        view.animate().scaleX(0.95f).scaleY(0.95f).setDuration(100).start()
+                    }
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                        view.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+                        if (event.action == android.view.MotionEvent.ACTION_UP) {
+                            view.performClick()
+                            onBookClick(book)
+                        }
+                    }
+                }
                 true
             }
         }

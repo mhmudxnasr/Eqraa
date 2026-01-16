@@ -6,11 +6,11 @@
 
 package com.eqraa.reader.reader
 
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.RectF
 import android.os.Bundle
+import android.text.InputType
 import android.view.ActionMode
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -22,12 +22,14 @@ import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ListPopupWindow
 import android.widget.PopupWindow
 import android.widget.TextView
 import androidx.annotation.ColorInt
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -46,6 +48,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
@@ -120,6 +123,7 @@ import com.eqraa.reader.utils.toggleSystemUi
 import com.eqraa.reader.utils.viewLifecycle
 import com.google.android.material.snackbar.Snackbar
 import com.eqraa.reader.data.BackupManager
+import com.eqraa.reader.data.ReadingSyncManager
 
 /*
  * Base reader fragment class
@@ -158,7 +162,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
     sealed class ActiveOverlay {
         object None : ActiveOverlay()
         data class Dictionary(val tab: Int) : ActiveOverlay()
-        object Ai : ActiveOverlay()
+        data class Ai(val initialAction: String? = null) : ActiveOverlay()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -208,6 +212,10 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         }
 
         setupObservers()
+        // No changes needed here, just a dummy edit to keep flow check.
+        // Actually, the previous tool call already updated the observer to use binding.pageNumberContainer.
+        // I will just verify the XML change was applied correctly.
+
 
         childFragmentManager.addOnBackStackChangedListener {
             updateSystemUiVisibility()
@@ -274,8 +282,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
 
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding(),
+                    .fillMaxSize(),
                 content = { Overlay() }
             )
             
@@ -432,6 +439,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                 },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
                     .padding(8.dp)
             )
         }
@@ -441,7 +449,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                 text = selectedTextForOverlay,
                 initialTab = overlay.tab,
                 onDismiss = { activeOverlay = ActiveOverlay.None },
-                onSave = { /* TODO: Implement save functionality */ },
+                onSave = { model.saveWordCard(it) },
                 onAddNote = { /* TODO: Implement add note */ },
                 onCopy = { /* TODO: Implement copy */ },
                 onPronounce = { /* TODO: Implement TTS pronunciation */ }
@@ -453,7 +461,9 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                 onDismiss = { activeOverlay = ActiveOverlay.None },
                 onSummarizeChapter = { /* TODO: Implement chapter summary */ },
                 onExplainSymbolism = { /* TODO: Implement symbolism explanation */ },
-                onAskQuestion = { question -> /* TODO: Process AI question */ }
+
+                onAskQuestion = { question -> /* TODO: Process AI question */ },
+                initialAction = overlay.initialAction
             )
             ActiveOverlay.None -> {
                 // Animated Top Bar
@@ -479,11 +489,35 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
                             ).show(childFragmentManager, "ReaderSettings")
                         },
                         onBookmarkClick = { model.insertBookmark(navigator.currentLocator.value) },
+                        onStatsClick = {
+                            com.eqraa.reader.reader.stats.ReadingStatsBottomSheet(model)
+                                .show(childFragmentManager, "ReadingStats")
+                        },
                         modifier = Modifier
-                            .background(androidx.compose.ui.graphics.Color.White) // Ensure background for status bar scrim
-                            .statusBarsPadding() // Robust padding for status bar ONLY
                     )
                 }
+                
+                // Selection Toolbar (New Compose-based)
+                com.eqraa.reader.reader.annotations.SelectionToolbar(
+                    visible = isSelectionToolbarVisible,
+                    onHighlight = { showAnnotationBottomSheet() },
+                    onNote = { showAnnotationBottomSheet() },
+                    onDefine = { 
+                        hideSelectionToolbar()
+                        showDictionaryOverlay(0) 
+                    },
+                    onTranslate = { 
+                        hideSelectionToolbar()
+                        showDictionaryOverlay(1) 
+                    },
+                    onAskAi = { 
+                        hideSelectionToolbar()
+                        showAiOverlay(initialAction = null) 
+                    },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 100.dp) // Position below potential selection
+                )
             }
         }
     }
@@ -574,6 +608,8 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         }
     }
 
+
+
     /**
      * Observe sync status and show feedback to the user.
      */
@@ -582,21 +618,24 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 var currentSnackbar: Snackbar? = null
                 
-                model.syncState.collect { state ->
+                model.readingSyncStatus.collect { state ->
                     currentSnackbar?.dismiss()
                     
                     when (state) {
-                        is BackupManager.SyncState.Syncing -> {
+                        is ReadingSyncManager.SyncStatus.Syncing -> {
                             currentSnackbar = Snackbar.make(binding.root, "Syncing data to cloud...", Snackbar.LENGTH_INDEFINITE)
                             currentSnackbar.show()
                         }
-                        is BackupManager.SyncState.Success -> {
+                        is ReadingSyncManager.SyncStatus.Success -> {
                             Snackbar.make(binding.root, "Sync successful", Snackbar.LENGTH_SHORT).show()
                         }
-                        is BackupManager.SyncState.Error -> {
-                            Snackbar.make(binding.root, "Sync failed: ${state.message}", Snackbar.LENGTH_LONG).show()
+                        is ReadingSyncManager.SyncStatus.Failed -> {
+                            Snackbar.make(binding.root, "Sync failed", Snackbar.LENGTH_LONG).show()
                         }
-                        is BackupManager.SyncState.Idle -> {
+                        is ReadingSyncManager.SyncStatus.Offline -> {
+                             Snackbar.make(binding.root, "You are offline", Snackbar.LENGTH_SHORT).show()
+                        }
+                        is ReadingSyncManager.SyncStatus.Idle -> {
                             // No-op
                         }
                     }
@@ -607,14 +646,23 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
 
     private fun showSearchDialog() {
         val activity = activity ?: return
-        val view = layoutInflater.inflate(R.layout.popup_note, null, false) // Reusing popup_note for input
-        val input = view.findViewById<EditText>(R.id.note)
+        val input = EditText(activity)
+        input.inputType = InputType.TYPE_CLASS_TEXT
         input.hint = "Search query..."
+        val container = FrameLayout(activity)
+        val params = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        params.leftMargin = 50 // Convert to DP in real app
+        params.rightMargin = 50
+        input.layoutParams = params
+        container.addView(input)
         
         AlertDialog.Builder(activity)
             .setTitle("Find in book")
-            .setView(view)
-            .setPositiveButton("Search") { _, _ ->
+            .setView(container)
+            .setPositiveButton("Search") { dialog, which ->
                 val query = input.text.toString()
                 if (query.isNotBlank()) {
                     model.search(query)
@@ -640,6 +688,21 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
             )
         ) {
             AndroidTtsEngine.requestInstallVoice(activity)
+        }
+    }
+
+    // Public methods for Activity to control navigation (e.g. Volume Keys)
+    fun goPrevious() {
+        val nav = navigator
+        if (nav is OverflowableNavigator) {
+            nav.goBackward(animated = true)
+        }
+    }
+
+    fun goNext() {
+        val nav = navigator
+        if (nav is OverflowableNavigator) {
+            nav.goForward(animated = true)
         }
     }
 
@@ -675,21 +738,10 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
             // "highlights" group. To differentiate between the page margin icon and the
             // actual highlight, we check for the type of `decoration.style`. But you could
             // use any other information, including the decoration ID or the extras bundle.
-            if (decoration.style is DecorationStyleAnnotationMark) {
-                showAnnotationPopup(id)
-            } else {
-                event.rect?.let { rect ->
-                    val isUnderline = (decoration.style is Decoration.Style.Underline)
-                    showHighlightPopup(
-                        rect,
-                        style = if (isUnderline) {
-                            Highlight.Style.UNDERLINE
-                        } else {
-                            Highlight.Style.HIGHLIGHT
-                        },
-                        highlightId = id
-                    )
-                }
+            // Unified handling: Single tap opens the Annotation Bottom Sheet for editing
+            // regardless of whether it's a highlight or underline.
+            if (id > 0) {
+                showAnnotationBottomSheet(id)
             }
 
             return true
@@ -701,14 +753,7 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
     private var popupWindow: PopupWindow? = null
     private var mode: ActionMode? = null
 
-    // Available tint colors for highlight and underline annotations.
-    private val highlightTints = mapOf</*@IdRes*/ Int, /*@ColorInt*/ Int>(
-        R.id.red to Color.rgb(247, 124, 124),
-        R.id.green to Color.rgb(173, 247, 123),
-        R.id.blue to Color.rgb(124, 198, 247),
-        R.id.yellow to Color.rgb(249, 239, 125),
-        R.id.purple to Color.rgb(182, 153, 255)
-    )
+
 
     val customSelectionActionModeCallback: ActionMode.Callback by lazy { SelectionActionModeCallback() }
 
@@ -742,264 +787,93 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
     private var selectionPopupWindow: PopupWindow? = null
 
     private fun showSelectionPopup() {
-         viewLifecycleOwner.lifecycleScope.launch {
-             // Slight delay to ensure selection rect is available
-             delay(100)
-             
-             if (!isAdded || view == null) return@launch
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Slight delay to ensure selection rect is available
+            delay(100)
+            
+            if (!isAdded || view == null) return@launch
 
             try {
-                (navigator as? SelectableNavigator)?.currentSelection()?.rect?.let { r ->
-                     // Normalize rect if needed (bottom < top)
-                    val selectionRect = if (r.bottom < r.top) {
-                        RectF(r.left, r.bottom, r.right, r.top)
-                    } else {
-                        r
-                    }
-
-                    if (selectionPopupWindow?.isShowing == true) return@launch
-
-                    val popupView = layoutInflater.inflate(R.layout.popup_selection, null, false)
-                    popupView.measure(
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-                    )
-
-                    selectionPopupWindow = PopupWindow(
-                        popupView,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        isFocusable = false // Don't take focus so selection remains
-                        isOutsideTouchable = false
-                        elevation = 8f
-                        setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
-                    }
-
-                    // Calculate position (centered above selection)
-                    val x = selectionRect.centerX().toInt() - (popupView.measuredWidth / 2)
-                    // Default to above, but check space
-                    val yAbove = selectionRect.top.toInt() - popupView.measuredHeight - 20
+                (navigator as? SelectableNavigator)?.currentSelection()?.let { selection ->
+                    // Store selected text for overlays
+                    selectedTextForOverlay = selection.locator.text.highlight ?: ""
                     
-                    val screenWidth = resources.displayMetrics.widthPixels
-                    
-                    // Fix: Ensure max is at least min to avoid IllegalArgumentException
-                    val minX = 20
-                    val maxSafeX = (screenWidth - popupView.measuredWidth - 20).coerceAtLeast(minX)
-                    val safeX = x.coerceIn(minX, maxSafeX)
-                    
-                    // If not enough space above, show below
-                    val safeY = if (yAbove < 100) {
-                         selectionRect.bottom.toInt() + 20
-                    } else {
-                         yAbove
-                    }
-
-                    view?.let { parentView ->
-                        selectionPopupWindow?.showAtLocation(parentView, Gravity.NO_GRAVITY, safeX, safeY)
-                    }
-
-                    // Set click listeners
-                    popupView.findViewById<View>(R.id.action_highlight).setOnClickListener {
-                        showHighlightPopupWithStyle(Highlight.Style.HIGHLIGHT)
-                        selectionPopupWindow?.dismiss()
-                        mode?.finish() 
-                    }
-                    
-
-                    
-                    popupView.findViewById<View>(R.id.action_note).setOnClickListener {
-                        showAnnotationPopup()
-                        selectionPopupWindow?.dismiss()
-                        mode?.finish()
-                    }
-                    
-                    popupView.findViewById<View>(R.id.action_define).setOnClickListener {
-                        showDictionaryOverlay(0)
-                        selectionPopupWindow?.dismiss()
-                        mode?.finish()
-                    }
-                    
-
-                    
-                    popupView.findViewById<View>(R.id.action_ask_ai).setOnClickListener {
-                        showAiOverlay()
-                        selectionPopupWindow?.dismiss()
-                        mode?.finish()
-                    }
+                    // Show the new Compose toolbar via state
+                    isSelectionToolbarVisible = true
                 }
             } catch (e: Exception) {
-                // Log error but don't crash app
                 android.util.Log.e("SelectionPopup", "Error showing popup", e)
-                e.printStackTrace()
             }
         }
     }
-
-    private fun showHighlightPopupWithStyle(style: Highlight.Style) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            // Get the rect of the current selection to know where to position the highlight
-            // popup.
-            (navigator as? SelectableNavigator)?.currentSelection()?.rect?.let { selectionRect ->
-                showHighlightPopup(selectionRect, style)
-            }
-        }
+    
+    // State for new Compose-based selection toolbar
+    private var isSelectionToolbarVisible by mutableStateOf(false)
+    
+    private fun hideSelectionToolbar() {
+        isSelectionToolbarVisible = false
+        mode?.finish()
     }
-
-    private fun showHighlightPopup(rect: RectF, style: Highlight.Style, highlightId: Long? = null) {
+    
+    private fun showAnnotationBottomSheet(highlightId: Long? = null) {
+        hideSelectionToolbar()
         viewLifecycleOwner.lifecycleScope.launch {
-            if (popupWindow?.isShowing == true) return@launch
-
-            model.activeHighlightId.value = highlightId
-
-            val isReverse = (rect.top > 60)
-            val popupView = layoutInflater.inflate(
-                if (isReverse) R.layout.view_action_mode_reverse else R.layout.view_action_mode,
-                null,
-                false
-            )
-            popupView.measure(
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            )
-
-            popupWindow = PopupWindow(
-                popupView,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                isFocusable = true
-                setOnDismissListener {
-                    model.activeHighlightId.value = null
-                }
+            val existingHighlight = highlightId?.let { model.highlightById(it) }
+            val text = existingHighlight?.locator?.text?.highlight ?: selectedTextForOverlay.ifBlank { 
+                (navigator as? SelectableNavigator)?.currentSelection()?.locator?.text?.highlight ?: ""
             }
-
-            val x = rect.left
-            val y = if (isReverse) rect.top else rect.bottom + rect.height()
-
-            popupWindow?.showAtLocation(popupView, Gravity.NO_GRAVITY, x.toInt(), y.toInt())
-
-            val highlight = highlightId?.let { model.highlightById(it) }
-            popupView.run {
-                findViewById<View>(R.id.notch).run {
-                    setX(rect.left * 2)
-                }
-
-                fun selectTint(view: View) {
-                    val tint = highlightTints[view.id] ?: return
-                    selectHighlightTint(highlightId, style, tint)
-                }
-
-                findViewById<View>(R.id.red).setOnClickListener(::selectTint)
-                findViewById<View>(R.id.green).setOnClickListener(::selectTint)
-                findViewById<View>(R.id.blue).setOnClickListener(::selectTint)
-                findViewById<View>(R.id.yellow).setOnClickListener(::selectTint)
-                findViewById<View>(R.id.purple).setOnClickListener(::selectTint)
-
-                findViewById<View>(R.id.annotation).setOnClickListener {
-                    popupWindow?.dismiss()
-                    showAnnotationPopup(highlightId)
-                }
-                findViewById<View>(R.id.del).run {
-                    visibility = if (highlight != null) View.VISIBLE else View.GONE
-                    setOnClickListener {
-                        highlightId?.let {
-                            model.deleteHighlight(highlightId)
-                        }
-                        popupWindow?.dismiss()
-                        mode?.finish()
+            
+            val sheet = com.eqraa.reader.reader.annotations.AnnotationBottomSheet(
+                selectedText = text,
+                existingHighlight = existingHighlight,
+                onSave = { intensity, note ->
+                    // Convert intensity to style
+                    val style = if (intensity == com.eqraa.reader.reader.annotations.HighlightIntensity.UNDERLINE) {
+                        Highlight.Style.UNDERLINE
+                    } else {
+                        Highlight.Style.HIGHLIGHT
                     }
-                }
-            }
-        }
-    }
-
-    private fun selectHighlightTint(
-        highlightId: Long? = null,
-        style: Highlight.Style,
-        @ColorInt tint: Int,
-    ) =
-        viewLifecycleOwner.lifecycleScope.launch {
-            if (highlightId != null) {
-                model.updateHighlightStyle(highlightId, style, tint)
-            } else {
-                (navigator as? SelectableNavigator)?.let { navigator ->
-                    navigator.currentSelection()?.let { selection ->
-                        model.addHighlight(
-                            locator = selection.locator,
-                            style = style,
-                            tint = tint
-                        )
-                    }
-                    navigator.clearSelection()
-                }
-            }
-
-            popupWindow?.dismiss()
-            mode?.finish()
-        }
-
-    private fun showAnnotationPopup(highlightId: Long? = null) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val activity = activity ?: return@launch
-            val view = layoutInflater.inflate(R.layout.popup_note, null, false)
-            val note = view.findViewById<EditText>(R.id.note)
-            val alert = AlertDialog.Builder(activity)
-                .setView(view)
-                .create()
-
-            fun dismiss() {
-                alert.dismiss()
-                mode?.finish()
-                (activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
-                    .hideSoftInputFromWindow(
-                        note.applicationWindowToken,
-                        InputMethodManager.HIDE_NOT_ALWAYS
+                    // Use grayscale tint based on intensity
+                    val tint = android.graphics.Color.argb(
+                        (intensity.alpha * 255).toInt().coerceIn(25, 255),
+                        0, 0, 0
                     )
-            }
-
-            with(view) {
-                val highlight = highlightId?.let { model.highlightById(it) }
-                if (highlight != null) {
-                    note.setText(highlight.annotation)
-                    findViewById<View>(R.id.sidemark).setBackgroundColor(highlight.tint)
-                    findViewById<TextView>(R.id.select_text).text =
-                        highlight.locator.text.highlight
-
-                    findViewById<TextView>(R.id.positive).setOnClickListener {
-                        val text = note.text.toString()
-                        model.updateHighlightAnnotation(highlight.id, annotation = text)
-                        dismiss()
+                    
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        if (existingHighlight != null) {
+                            // Update existing
+                            model.updateHighlightStyle(existingHighlight.id, style, tint)
+                            model.updateHighlightAnnotation(existingHighlight.id, note)
+                        } else {
+                            // Create new
+                            (navigator as? SelectableNavigator)?.currentSelection()?.let { selection ->
+                                model.addHighlight(
+                                    locator = selection.locator,
+                                    style = style,
+                                    tint = tint,
+                                    annotation = note
+                                )
+                                (navigator as? SelectableNavigator)?.clearSelection()
+                            }
+                        }
                     }
-                } else {
-                    val tint = highlightTints.values.random()
-                    findViewById<View>(R.id.sidemark).setBackgroundColor(tint)
-                    val navigator =
-                        navigator as? SelectableNavigator ?: return@launch
-                    val selection = navigator.currentSelection() ?: return@launch
-                    navigator.clearSelection()
-                    findViewById<TextView>(R.id.select_text).text =
-                        selection.locator.text.highlight
-
-                    findViewById<TextView>(R.id.positive).setOnClickListener {
-                        model.addHighlight(
-                            locator = selection.locator,
-                            style = Highlight.Style.HIGHLIGHT,
-                            tint = tint,
-                            annotation = note.text.toString()
-                        )
-                        dismiss()
+                },
+                onDelete = {
+                    if (existingHighlight != null) {
+                         model.deleteHighlight(existingHighlight.id)
+                    }
+                },
+                onDismiss = {
+                    if (existingHighlight == null) {
+                        (navigator as? SelectableNavigator)?.clearSelection()
                     }
                 }
-
-                findViewById<TextView>(R.id.negative).setOnClickListener {
-                    dismiss()
-                }
-            }
-
-            alert.show()
+            )
+            sheet.show(childFragmentManager, "AnnotationSheet")
         }
     }
+
+
 
     private fun showFootnotePopup(
         text: CharSequence,
@@ -1076,12 +950,12 @@ abstract class VisualReaderFragment : BaseReaderFragment() {
         }
     }
 
-    private fun showAiOverlay() {
+    private fun showAiOverlay(initialAction: String? = null) {
         viewLifecycleOwner.lifecycleScope.launch {
             val text = (navigator as? SelectableNavigator)?.currentSelection()?.locator?.text?.highlight
             if (!text.isNullOrBlank()) {
                 selectedTextForOverlay = text
-                activeOverlay = ActiveOverlay.Ai
+                activeOverlay = ActiveOverlay.Ai(initialAction = initialAction)
             }
         }
     }

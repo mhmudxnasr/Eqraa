@@ -47,6 +47,7 @@ class RealtimeSyncManager(
     // Channel references
     private var preferencesChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     private var highlightsChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
+    private var bookmarksChannel: io.github.jan.supabase.realtime.RealtimeChannel? = null
     
     // Subscription jobs
     private var subscriptionJob: Job? = null
@@ -73,6 +74,11 @@ class RealtimeSyncManager(
         ) : RealtimeEvent()
         
         data class HighlightUpdated(
+            val bookId: String,
+            val action: String // "INSERT", "UPDATE", "DELETE"
+        ) : RealtimeEvent()
+        
+        data class BookmarkUpdated(
             val bookId: String,
             val action: String // "INSERT", "UPDATE", "DELETE"
         ) : RealtimeEvent()
@@ -105,6 +111,9 @@ class RealtimeSyncManager(
                 // Subscribe to highlights table (if exists)
                 subscribeToHighlights()
                 
+                // Subscribe to bookmarks table
+                subscribeToBookmarks()
+                
                 _isConnected.value = true
                 Timber.d("RealtimeSyncManager: All subscriptions active")
                 
@@ -124,6 +133,7 @@ class RealtimeSyncManager(
             try {
                 preferencesChannel?.unsubscribe()
                 highlightsChannel?.unsubscribe()
+                bookmarksChannel?.unsubscribe()
                 subscriptionJob?.cancel()
                 _isConnected.value = false
                 Timber.d("RealtimeSyncManager: Stopped listening")
@@ -204,6 +214,44 @@ class RealtimeSyncManager(
         ...
     }
     */
+    
+    private suspend fun subscribeToBookmarks() {
+        try {
+            bookmarksChannel = supabase.realtime.channel("bookmarks_channel")
+            
+            val changeFlow = bookmarksChannel!!.postgresChangeFlow<PostgresAction>(
+                schema = "public"
+            ) {
+                table = "bookmarks"
+            }
+            
+            changeFlow.onEach { action ->
+                val bookId = when (action) {
+                    is PostgresAction.Insert -> action.record["book_id"]?.jsonPrimitive?.content
+                    is PostgresAction.Update -> action.record["book_id"]?.jsonPrimitive?.content
+                    is PostgresAction.Delete -> action.oldRecord["book_id"]?.jsonPrimitive?.content
+                    else -> null
+                }
+                
+                val actionType = when (action) {
+                    is PostgresAction.Insert -> "INSERT"
+                    is PostgresAction.Update -> "UPDATE"
+                    is PostgresAction.Delete -> "DELETE"
+                    else -> "UNKNOWN"
+                }
+                
+                if (bookId != null) {
+                    _events.emit(RealtimeEvent.BookmarkUpdated(bookId, actionType))
+                }
+            }.launchIn(scope)
+            
+            bookmarksChannel!!.subscribe()
+            Timber.d("Subscribed to bookmarks")
+            
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to subscribe to bookmarks (table may not exist)")
+        }
+    }
     
     private suspend fun handlePreferencesChange(record: kotlinx.serialization.json.JsonObject) {
         try {

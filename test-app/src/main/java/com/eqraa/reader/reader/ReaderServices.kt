@@ -176,7 +176,7 @@ object DictionaryService {
 object TranslationService {
     
     private const val API_URL = "https://api.groq.com/openai/v1/chat/completions"
-    private const val API_KEY = "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"
+    private const val API_KEY = "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"
     private const val TARGET_LANG = "ar"
 
     /**
@@ -184,14 +184,9 @@ object TranslationService {
      */
     suspend fun translateToArabic(text: String): Result<Translation> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val systemPrompt = Prompts.TRANSLATION_PROTOCOL
             val userPrompt = """
-                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Be accurate and preserve the original meaning.
-                
-                After the translation, please add a newline and write a short, beautiful poem about Egypt in Arabic.
-                
-                Text to translate: "$text"
+                Input: "$text"
             """.trimIndent()
 
             val url = URL(API_URL)
@@ -202,7 +197,7 @@ object TranslationService {
             connection.doOutput = true
             
             val requestBody = JSONObject().apply {
-                put("model", "llama-3.3-70b-versatile")
+                put("model", "openai/gpt-oss-120b")
                 put("messages", JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                     put(JSONObject().apply { put("role", "user"); put("content", userPrompt) })
@@ -335,6 +330,25 @@ object Prompts {
         </system_instruction>
     """.trimIndent()
 
+    val TRANSLATION_PROTOCOL = """
+        Role: You are an expert English-to-Arabic linguist and lexicographer.
+
+        Objective: Analyze the user's selected text and execute one of the following protocols based strictly on word count.
+
+        Protocol A: Single Word Selection (If the input contains exactly one word):
+        - Provide a clean list of 3 distinct Arabic meanings.
+        - **Constraints**: 
+          - NO English descriptors.
+          - NO definitions (e.g. do not say "أي ينظر إليه"). 
+          - NO titles or headers (e.g. do not say "**Meanings**").
+          - Just the Arabic words/phrases, one per line.
+          - Followed by 1 example sentence in Arabic starting with a bullet point.
+
+        Protocol B: Phrase or Sentence Selection (If the input contains two or more words):
+        - **Translation**: Translate the text into fluent, high-quality Arabic.
+        - **Context**: Maintain the literary tone of the original text. Do not provide definitions.
+    """.trimIndent()
+
     val REAL_LIFE_SCENARIO = """
         <system_instruction mode="real_life_scenario">
             <role>
@@ -432,7 +446,18 @@ class CerebrasService(private val customApiKey: String?) : AiService {
             val systemPrompt = Prompts.ARABIC_EXPLANATION
             val userPrompt = """
                 Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+                Structure your response as follows:
+                
+                **Meaning:**
+                [Direct translation]
+                
+                **Examples:**
+                1. [Arabic sentence]
+                2. [Arabic sentence]
+                3. [Arabic sentence]
+                
+                ---
+                Made with love by Mahmud
                 
                 Text to translate: "$text"
             """.trimIndent()
@@ -536,10 +561,18 @@ class OllamaService(private val baseUrl: String) : AiService {
             val systemPrompt = Prompts.ARABIC_EXPLANATION
             val userPrompt = """
                 Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                1. Provide the main translation clearly.
-                2. Provide 3 varied sentences as examples showing how this word/phrase is used in different contexts (with their Arabic translations).
+                Structure your response as follows:
                 
-                Format clear and readable.
+                **Meaning:**
+                [Direct translation]
+                
+                **Examples:**
+                1. [Arabic sentence]
+                2. [Arabic sentence]
+                3. [Arabic sentence]
+                
+                ---
+                Made with love by Mahmud
                 
                 Text to translate: "$text"
             """.trimIndent()
@@ -600,7 +633,7 @@ class OllamaService(private val baseUrl: String) : AiService {
 class GroqService(private val customApiKey: String?) : AiService {
     
     private val API_URL = "https://api.groq.com/openai/v1/chat/completions"
-    private val DEFAULT_KEY = "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" // User must provide their own key in settings
+    private val DEFAULT_KEY = "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" // User must provide their own key in settings
     private val API_KEY = if (customApiKey.isNullOrBlank()) DEFAULT_KEY else customApiKey
 
     override suspend fun breakDownSelection(selection: String, bookTitle: String, chapterTitle: String): Result<String> = withContext(Dispatchers.IO) {
@@ -646,12 +679,9 @@ class GroqService(private val customApiKey: String?) : AiService {
 
     override suspend fun translateToArabic(text: String): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = Prompts.ARABIC_EXPLANATION
+            val systemPrompt = Prompts.TRANSLATION_PROTOCOL
             val userPrompt = """
-                Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
-                
-                Text to translate: "$text"
+                Input: "$text"
             """.trimIndent()
             Result.success(makeRequest(systemPrompt, userPrompt))
         } catch (e: Exception) { Result.failure(e) }
@@ -678,7 +708,7 @@ class GroqService(private val customApiKey: String?) : AiService {
         connection.doOutput = true
         
         val requestBody = JSONObject().apply {
-            put("model", "llama-3.3-70b-versatile")
+            put("model", "openai/gpt-oss-120b")
             put("messages", JSONArray().apply {
                 put(JSONObject().apply { put("role", "system"); put("content", systemContent) })
                 put(JSONObject().apply { put("role", "user"); put("content", userContent) })
@@ -750,7 +780,18 @@ object OpenRouterService : AiService {
             val systemPrompt = "You are a professional translator."
             val userPrompt = """
                 Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+                Structure your response as follows:
+                
+                **Meaning:**
+                [Direct translation]
+                
+                **Examples:**
+                1. [Arabic sentence]
+                2. [Arabic sentence]
+                3. [Arabic sentence]
+                
+                ---
+                Made with love by Mahmud
                 
                 Text to translate: "$text"
             """.trimIndent()
@@ -855,7 +896,18 @@ class GeminiService(private val customApiKey: String?) : AiService {
             val systemPrompt = Prompts.ARABIC_EXPLANATION
             val userPrompt = """
                 Translate the following English text to Modern Standard Arabic (العربية الفصحى).
-                Provide ONLY the Arabic translation, nothing else. Be accurate and preserve the original meaning.
+                Structure your response as follows:
+                
+                **Meaning:**
+                [Direct translation]
+                
+                **Examples:**
+                1. [Arabic sentence]
+                2. [Arabic sentence]
+                3. [Arabic sentence]
+                
+                ---
+                Made with love by Mahmud
                 
                 Text to translate: "$text"
             """.trimIndent()

@@ -37,6 +37,36 @@ class ImportActivity : Activity() {
     }
 
     private fun importPublication(intent: Intent) {
+        if (intent.action == Intent.ACTION_SEND && "text/plain" == intent.type) {
+            val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!text.isNullOrBlank()) {
+                val app = application as Application
+                // Check if it's a URL
+                if (android.util.Patterns.WEB_URL.matcher(text).matches()) {
+                    val url = Uri.parse(text).toAbsoluteUrl()
+                    if (url != null) {
+                        app.bookshelf.importPublicationFromHttp(url)
+                    }
+                } else {
+                    // It's raw text, convert to EPUB
+                    val title = text.lines().firstOrNull()?.take(30)?.trim() ?: "Quick Note"
+                    // Generate in a background thread to avoid ANR, although it's short
+                    Thread {
+                        try {
+                            val generator = EpubGenerator(this)
+                            val file = generator.createEpub(title, text)
+                            runOnUiThread {
+                                app.bookshelf.importPublicationFromStorage(Uri.fromFile(file))
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to generate EPUB from text")
+                        }
+                    }.start()
+                }
+                return
+            }
+        }
+
         val uri = uriFromIntent(intent)
             ?: run {
                 Timber.d("Got an empty intent.")

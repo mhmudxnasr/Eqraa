@@ -34,6 +34,7 @@ class ReadingPreferences(context: Context, private val bookId: String? = null) {
         private const val KEY_GEMINI_API_KEY = "gemini_api_key"
         private const val KEY_CEREBRAS_API_KEY = "cerebras_api_key"
         private const val KEY_IS_EDIT_MODE = "is_edit_mode"
+        private const val KEY_AUTO_BOOKMARK = "auto_bookmark"
         
         // Defaults
         const val DEFAULT_FONT_FAMILY = "Newsreader"
@@ -165,6 +166,11 @@ class ReadingPreferences(context: Context, private val bookId: String? = null) {
     var isEditMode: Boolean
         get() = getBoolean(KEY_IS_EDIT_MODE, false)
         set(value) = putBoolean(KEY_IS_EDIT_MODE, value)
+
+    // Auto Bookmark on Close
+    var autoBookmark: Boolean
+        get() = getBoolean(KEY_AUTO_BOOKMARK, true)
+        set(value) = putBoolean(KEY_AUTO_BOOKMARK, value)
     
     // Reset all to defaults
     fun resetToDefaults() {

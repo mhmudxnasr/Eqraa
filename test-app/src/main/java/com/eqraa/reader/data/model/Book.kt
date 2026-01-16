@@ -34,7 +34,9 @@ data class Book(
     @ColumnInfo(name = COVER)
     val cover: String,
     @ColumnInfo(name = "is_synced", defaultValue = "1")
-    var isSynced: Boolean = true
+    var isSynced: Boolean = true,
+    @ColumnInfo(name = UPDATED_AT, defaultValue = "0")
+    val updatedAt: Long = 0L
 ) {
 
     constructor(
@@ -47,6 +49,7 @@ data class Book(
         progression: String? = null,
         mediaType: MediaType,
         cover: String,
+        updatedAt: Long = 0L
     ) : this(
         id = id,
         creation = creation,
@@ -56,7 +59,8 @@ data class Book(
         identifier = identifier,
         progression = progression,
         rawMediaType = mediaType.toString(),
-        cover = cover
+        cover = cover,
+        updatedAt = updatedAt
     )
 
     val url: AbsoluteUrl get() = AbsoluteUrl(href)!!
@@ -76,5 +80,6 @@ data class Book(
         const val PROGRESSION = "progression"
         const val MEDIA_TYPE = "media_type"
         const val COVER = "cover"
+        const val UPDATED_AT = "updated_at"
     }
 }

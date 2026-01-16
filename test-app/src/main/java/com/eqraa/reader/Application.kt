@@ -36,10 +36,12 @@ import com.eqraa.reader.data.CloudLibraryManager
 import com.eqraa.reader.data.UserPreferencesSyncManager
 import com.eqraa.reader.data.RealtimeSyncManager
 import com.eqraa.reader.data.HighlightSyncManager
+import com.eqraa.reader.data.BookmarkSyncManager
 // import com.eqraa.reader.data.EqraaLibrarySyncManager (Removed)
 // import com.eqraa.reader.data.StorageManager (Removed)
 // import com.eqraa.reader.data.api.ApiClient (Removed)
 import com.eqraa.reader.data.SupabaseService
+import com.eqraa.reader.data.ReadingSessionSyncManager
 import com.eqraa.reader.settings.ReadingPreferences
 import com.eqraa.reader.domain.PublicationRetriever
 import com.eqraa.reader.reader.ReaderRepository
@@ -96,6 +98,15 @@ class Application : android.app.Application() {
     var highlightSyncManager: HighlightSyncManager? = null
         private set
 
+    var bookmarkSyncManager: BookmarkSyncManager? = null
+        private set
+
+    var readingSessionSyncManager: ReadingSessionSyncManager? = null
+        private set
+
+    var badgeManager: com.eqraa.reader.gamification.BadgeManager? = null
+        private set
+
     private val coroutineScope: CoroutineScope =
         MainScope()
 
@@ -104,7 +115,7 @@ class Application : android.app.Application() {
 
     override fun onCreate() {
         if (DEBUG) {
-            enableStrictMode()
+            // enableStrictMode()
             Timber.plant(Timber.DebugTree())
         }
 
@@ -120,7 +131,10 @@ class Application : android.app.Application() {
 
         bookRepository = BookRepository(database.booksDao())
 
-        statsRepository = StatsRepository(database.statsDao())
+        statsRepository = StatsRepository(
+            statsDao = database.statsDao(),
+            sessionSyncManager = null // Will be set after sync init if needed or we init sync manager earlier
+        )
 
         val downloadsDir = File(cacheDir, "downloads")
 
@@ -166,13 +180,13 @@ class Application : android.app.Application() {
             
             readingProgressRepository = ReadingProgressRepository(
                 booksDao = database.booksDao(),
-                syncDao = database.syncDao(),
                 context = this@Application
             )
             
             readingSyncManager = ReadingSyncManager(
                 supabase = SupabaseService.client,
                 context = this@Application,
+                booksDao = database.booksDao(),
                 scope = coroutineScope
             )
             
@@ -182,6 +196,23 @@ class Application : android.app.Application() {
             
             highlightSyncManager = HighlightSyncManager(this@Application, coroutineScope)
             bookRepository.highlightSyncManager = highlightSyncManager
+            
+            bookmarkSyncManager = BookmarkSyncManager(this@Application, coroutineScope)
+            bookRepository.bookmarkSyncManager = bookmarkSyncManager
+            
+            readingSessionSyncManager = ReadingSessionSyncManager(this@Application, coroutineScope)
+            
+            // Re-init stats repository with sync manager
+            statsRepository = StatsRepository(
+                statsDao = database.statsDao(),
+                sessionSyncManager = readingSessionSyncManager
+            )
+
+            // Gamification
+            badgeManager = com.eqraa.reader.gamification.BadgeManager(database.badgeDao())
+            coroutineScope.launch {
+                badgeManager?.seedDefaultBadges()
+            }
 
             Timber.d("Sync managers initialized for user: $userId")
 
@@ -225,18 +256,19 @@ class Application : android.app.Application() {
     }
 
     private fun computeStorageDir(): File {
-        val properties = Properties()
-        val inputStream = assets.open("configs/config.properties")
-        properties.load(inputStream)
-        val useExternalFileDir =
-            properties.getProperty("useExternalFileDir", "false")!!.toBoolean()
+        // Force internal storage to avoid asset reading issues and simplify
+        // val properties = Properties()
+        // val inputStream = assets.open("configs/config.properties")
+        // properties.load(inputStream)
+        // val useExternalFileDir =
+        //     properties.getProperty("useExternalFileDir", "false")!!.toBoolean()
 
         return File(
-            if (useExternalFileDir) {
-                getExternalFilesDir(null)?.path + "/"
-            } else {
+            // if (useExternalFileDir) {
+            //     getExternalFilesDir(null)?.path + "/"
+            // } else {
                 filesDir?.path + "/"
-            }
+            // }
         )
     }
 

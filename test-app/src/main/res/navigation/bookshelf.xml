@@ -9,6 +9,23 @@
         android:id="@+id/navigation_bookshelf"
         android:name="com.eqraa.reader.bookshelf.BookshelfFragment"
         android:label="@string/title_bookshelf"
-        tools:layout="@layout/fragment_bookshelf" />
+        tools:layout="@layout/fragment_bookshelf">
+        <action
+            android:id="@+id/action_bookshelfFragment_to_opds"
+            app:destination="@id/opdsFeedFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/opdsFeedFragment"
+        android:name="com.eqraa.reader.opds.OpdsFeedFragment"
+        android:label="Catalog">
+        <argument
+            android:name="url"
+            app:argType="string"
+            android:defaultValue="https://standardebooks.org/opds/all" />
+        <action
+            android:id="@+id/action_opds_self"
+            app:destination="@id/opdsFeedFragment" />
+    </fragment>
 
 </navigation>

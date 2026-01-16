@@ -27,7 +27,7 @@ import com.eqraa.reader.databinding.ActivityReaderBinding
 import com.eqraa.reader.drm.DrmManagementContract
 import com.eqraa.reader.drm.DrmManagementFragment
 import com.eqraa.reader.outline.OutlineContract
-import com.eqraa.reader.outline.OutlineFragment
+import com.eqraa.reader.reader.outline.ComposeOutlineFragment
 import com.eqraa.reader.utils.launchWebBrowser
 import timber.log.Timber
 import com.eqraa.reader.ui.sync.SyncStatusViewModel
@@ -187,6 +187,29 @@ open class ReaderActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     try {
                         app.statsRepository.insertSession(bookId, sessionStartTime, endTime)
+                        
+                        // Auto-Bookmark on Close
+                        val prefs = com.eqraa.reader.settings.ReadingPreferences(this@ReaderActivity, bookId.toString())
+                        if (prefs.autoBookmark) {
+                            readerFragment.currentLocator?.let { locator ->
+                                try {
+                                    // Use insertBookmark from ViewModel but don't show toast feedback (it's background)
+                                    // Actually insertBookmark in ViewModel sends channel event for feedback.
+                                    // We might want to call repo directly or just accept the toast?
+                                    // Toast might be weird if app is closing.
+                                    // Better to call suspend function in repository directly? 
+                                    // ViewModel's `insertBookmark` updates UI.
+                                    // Let's use ViewModel but maybe we can suppress feedback or just let it fly.
+                                    // Since we are in onStop, UI might not show toast or it might show briefly.
+                                    
+                                    // However, `insertBookmark` in Repo adds to database and syncs.
+                                    // Let's call model.insertBookmark for consistency with sync.
+                                    model.insertBookmark(locator)
+                                } catch (e: Exception) {
+                                    // Ignore
+                                }
+                            }
+                        }
                     } catch (e: Exception) {
                         // Ignore errors
                     }
@@ -199,13 +222,9 @@ open class ReaderActivity : AppCompatActivity() {
     private fun reconfigureActionBar() {
         val currentFragment = supportFragmentManager.fragments.lastOrNull()
 
-        if (currentFragment is OutlineFragment || currentFragment is DrmManagementFragment) {
+        if (currentFragment is DrmManagementFragment) {
             supportActionBar?.show()
-            title = when (currentFragment) {
-                is OutlineFragment -> model.publication.metadata.title
-                is DrmManagementFragment -> getString(R.string.title_fragment_drm_management)
-                else -> null
-            }
+            title = getString(R.string.title_fragment_drm_management)
             supportActionBar?.setDisplayHomeAsUpEnabled(true)
         } else {
             supportActionBar?.hide()
@@ -288,7 +307,7 @@ open class ReaderActivity : AppCompatActivity() {
         supportFragmentManager.commit {
             add(
                 R.id.activity_container,
-                OutlineFragment::class.java,
+                com.eqraa.reader.reader.outline.ComposeOutlineFragment::class.java,
                 Bundle(),
                 OUTLINE_FRAGMENT_TAG
             )
@@ -323,6 +342,31 @@ open class ReaderActivity : AppCompatActivity() {
             }
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // Volume Button Navigation
+        val action = event.action
+        val keyCode = event.keyCode
+        
+        if (action == android.view.KeyEvent.ACTION_DOWN) {
+            val prefs = com.eqraa.reader.settings.ReadingPreferences(this, model.bookId.toString())
+            if (prefs.volumePageTurn) {
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_VOLUME_UP -> {
+                        // Previous Page
+                        (readerFragment as? VisualReaderFragment)?.goPrevious()
+                        return true
+                    }
+                    android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                        // Next Page
+                         (readerFragment as? VisualReaderFragment)?.goNext()
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     companion object {

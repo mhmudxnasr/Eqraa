@@ -18,12 +18,11 @@ import com.eqraa.reader.data.model.ReadingSession
 import timber.log.Timber
 
 class StatsRepository(
-    private val statsDao: StatsDao
+    private val statsDao: StatsDao,
+    private val sessionSyncManager: ReadingSessionSyncManager? = null
 ) {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private var userId: String? = null
-    // private var api: com.eqraa.reader.data.api.EqraaApiService? = null // Removed
-    // private val firestore by lazy { com.google.firebase.firestore.FirebaseFirestore.getInstance() }
     private var scope: kotlinx.coroutines.CoroutineScope? = null
 
     fun initialize(userId: String, scope: kotlinx.coroutines.CoroutineScope) {
@@ -40,12 +39,14 @@ class StatsRepository(
         )
         statsDao.insertSession(session)
         
-        // Sync disabled - handled by BackupManager
-        // syncStatsToServer() 
+        // Sync to Supabase
+        scope?.launch {
+            sessionSyncManager?.syncSession(session)
+        }
     }
 
     private fun syncStatsToServer() {
-        // Handled by BackupManager's full backup
+        // Handled by ReadingSessionSyncManager
     }
 
     fun totalReadingTimeMs(): Flow<Long> = statsDao.getTotalReadingTimeMs()

@@ -103,6 +103,9 @@
                 <!-- WebPub (Readium) -->
                 <data android:mimeType="application/webpub+zip" />
                 <data android:mimeType="application/webpub+json" />
+                <!-- Text / URL Share -->
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/html" />
             </intent-filter>
 
             <!-- VIEW (Open with) action -->
@@ -190,6 +193,11 @@
         <activity
             android:name=".reader.ReaderActivity"
             android:label="Reader" />
+
+        <activity
+            android:name=".flashcards.FlashcardActivity"
+            android:label="Vocabulary Builder"
+            android:theme="@style/MainActivityTheme"/>
 
         <service android:name=".reader.MediaService"
             android:enabled="true"

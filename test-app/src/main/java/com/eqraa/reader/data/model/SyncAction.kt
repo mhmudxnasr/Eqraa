@@ -19,5 +19,6 @@ data class SyncAction(
         const val TYPE_POSITION = "position"
         const val TYPE_PREFERENCE = "preference"
         const val TYPE_COLLECTION = "collection"
+        const val TYPE_BOOKMARK = "bookmark"
     }
 }

@@ -44,6 +44,8 @@ data class Bookmark(
     val location: String,
     @ColumnInfo(name = LOCATOR_TEXT)
     val locatorText: String,
+    @ColumnInfo(name = "CLOUD_ID")
+    var cloudId: String? = null,
 ) {
 
     val locator
@@ -67,5 +69,6 @@ data class Bookmark(
         const val RESOURCE_TITLE = "resource_title"
         const val LOCATION = "location"
         const val LOCATOR_TEXT = "locator_text"
+        const val CLOUD_ID = "CLOUD_ID"
     }
 }

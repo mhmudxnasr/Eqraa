@@ -21,8 +21,8 @@ import com.eqraa.reader.data.model.Highlight
 import com.eqraa.reader.data.model.ReadingSession
 
 @Database(
-    entities = [Book::class, Bookmark::class, Highlight::class, Catalog::class, ReadingSession::class, SyncAction::class, SyncLogEntry::class],
-    version = 5,
+    entities = [Book::class, Bookmark::class, Highlight::class, Catalog::class, ReadingSession::class, SyncAction::class, SyncLogEntry::class, WordCard::class, Badge::class],
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(
@@ -39,6 +39,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncDao(): SyncDao
 
     abstract fun syncLogDao(): SyncLogDao
+    
+    abstract fun wordCardDao(): WordCardDao
+
+    abstract fun badgeDao(): BadgeDao
 
     companion object {
         @Volatile
@@ -63,46 +67,106 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             }
         }
-
+        // ... (Previous migrations preserved)
+        
         private val MIGRATION_2_3 = object : Migration(2, 3) {
+             override fun migrate(database: SupportSQLiteDatabase) {
+                 database.execSQL(
+                     """
+                     CREATE TABLE IF NOT EXISTS ${SyncAction.TABLE_NAME} (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                         type TEXT NOT NULL,
+                         `key` TEXT NOT NULL,
+                         payload TEXT NOT NULL,
+                         timestamp INTEGER NOT NULL,
+                         retryCount INTEGER NOT NULL
+                     )
+                     """.trimIndent()
+                 )
+             }
+         }
+ 
+         private val MIGRATION_3_4 = object : Migration(3, 4) {
+             override fun migrate(database: SupportSQLiteDatabase) {
+                 database.execSQL(
+                     """
+                     CREATE TABLE IF NOT EXISTS sync_log (
+                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                         timestamp INTEGER NOT NULL,
+                         eventType TEXT NOT NULL,
+                         source TEXT NOT NULL,
+                         message TEXT NOT NULL,
+                         details TEXT
+                     )
+                     """.trimIndent()
+                 )
+             }
+         }
+ 
+         private val MIGRATION_4_5 = object : Migration(4, 5) {
+             override fun migrate(database: SupportSQLiteDatabase) {
+                 database.execSQL("ALTER TABLE books ADD COLUMN is_synced INTEGER NOT NULL DEFAULT 1")
+             }
+         }
+         
+         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     """
-                    CREATE TABLE IF NOT EXISTS ${SyncAction.TABLE_NAME} (
+                    CREATE TABLE IF NOT EXISTS word_cards (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        type TEXT NOT NULL,
-                        `key` TEXT NOT NULL,
-                        payload TEXT NOT NULL,
-                        timestamp INTEGER NOT NULL,
-                        retryCount INTEGER NOT NULL
+                        word TEXT NOT NULL,
+                        definition TEXT,
+                        contextSentence TEXT,
+                        translation TEXT,
+                        sourceBookId INTEGER,
+                        createdAt INTEGER NOT NULL,
+                        repetitionLevel INTEGER NOT NULL,
+                        nextReviewAt INTEGER NOT NULL,
+                        easeFactor REAL NOT NULL
                     )
                     """.trimIndent()
                 )
             }
         }
 
-        private val MIGRATION_3_4 = object : Migration(3, 4) {
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     """
-                    CREATE TABLE IF NOT EXISTS sync_log (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                        timestamp INTEGER NOT NULL,
-                        eventType TEXT NOT NULL,
-                        source TEXT NOT NULL,
-                        message TEXT NOT NULL,
-                        details TEXT
+                    CREATE TABLE IF NOT EXISTS badges (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        icon_name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        earned_at INTEGER,
+                        condition_type TEXT NOT NULL,
+                        condition_value INTEGER NOT NULL
                     )
                     """.trimIndent()
                 )
             }
         }
 
-        private val MIGRATION_4_5 = object : Migration(4, 5) {
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE books ADD COLUMN is_synced INTEGER NOT NULL DEFAULT 1")
+                database.execSQL("ALTER TABLE highlights ADD COLUMN CLOUD_ID TEXT")
             }
         }
+
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE bookmarks ADD COLUMN CLOUD_ID TEXT")
+            }
+        }
+
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add updated_at column to books table
+                database.execSQL("ALTER TABLE books ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
 
         fun getDatabase(context: Context): AppDatabase {
             val tempInstance = INSTANCE
@@ -115,7 +179,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .build()
                 INSTANCE = instance
                 return instance

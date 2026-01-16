@@ -75,6 +75,9 @@ data class BookmarkDto(
     @SerialName("user_id") val userId: String,
     @SerialName("book_id") val bookId: String,
     @SerialName("cfi") val cfi: String,
+    @SerialName("href") val href: String,
+    @SerialName("type") val type: String = "",
+    @SerialName("resource_index") val resourceIndex: Int = 0,
     @SerialName("title") val title: String?,
     @SerialName("timestamp") val timestamp: Long,
     @SerialName("deleted") val deleted: Boolean = false

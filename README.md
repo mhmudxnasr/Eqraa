@@ -1,8 +1,19 @@
-# Eqraa Reader v3.5.0
+# Eqraa Reader v4.0.0
 
 **Eqraa** is a premium, open-source reading application reimagined for modern Android devices. Built with a focus on immersive design, powerful synchronization, and privacy, Eqraa provides the ultimate reading experience for EPUB, PDF, and Audiobooks.
 
-## What's New in v3.5.0
+## What's New in v4.0.0
+
+### 🔄 Smart Sync System (V2)
+- **Robust Conflict Resolution**: New high-performance engine to detect and resolve reading progress mismatches between devices.
+- **Premium Design**: Redesigned Conflict Resolution Dialog with a "Glassy Black & White" aesthetic.
+- **Reading Analytics Sync**: Your reading sessions (duration, frequency, and time) now sync automatically to the cloud via Supabase.
+- **Safe Handshake**: Improved logic to ensure "Last Read" positions are never accidentally overwritten during device switching.
+
+### 📐 Advanced Typography & Layout
+- **Fixed Spacing Controls**: Line spacing and Word spacing are now fully functional.
+- **Enhanced RTL Support**: Fine-tuned typography specifically for Arabic books, ensuring a premium reading experience for all languages.
+- **"Book Styles" Toggle**: Complete control over your reading view. Choose between the original publisher's layout or your own custom settings.
 
 ### 🧠 Advanced AI Personas
 - **Specialized Modes**: Choose from **English Explanation**, **Arabic Explanation**, and **Real Life Scenario** to tailor the AI's assistance to your needs.
@@ -13,24 +24,9 @@
 - **Reliability**: Improved integration with Groq API for faster and more accurate results.
 
 ### 🎨 Refined UI/UX
-- **Visual Clarity**: Updated iconography for a more intuitive user experience.
-- **Polished Experience**: General bug fixes and performance improvements.
+- **Visual Clarity**: Updated iconography and smoother transitions throughout the app.
+- **Jump-to-Latest**: Smart snackbar notifications when newer progress is merged from other devices.
 
-### ☁️ Next-Gen Sync (Powered by Supabase)
-- **Real-time Progress**: Switch between devices instantly. Your page, bookmark, and highlights sync in real-time.
-- **Cloud Library**: Upload your books to the cloud and access them anywhere.
-- **Settings Sync**: Your font choices, theme preferences (Sepia/Dark/Light), and text size travel with you.
-- **Conflict Resolution**: Smart handling of concurrent reading sessions across multiple devices.
-
-### 🤖 AI Reading Companion
-- **Contextual Intelligence**: Select text to get instant summaries, character analysis, or historical context.
-- **Ask AI**: Chat with your book to uncover deeper meanings or clarify complex passages.
-
-### 📚 Comprehensive Format Support
-- **EPUB 3**: Full support for rich layout, media overlays, and interactivity.
-- **PDF**: Fast rendering with zoom and navigation tools.
-- **Audiobooks**: Listen to your books with variable playback speed and sleep timer.
-- **LCP**: Support for DRM-protected library content.
 
 ## Technical Highlights
 - **Engine**: Built on the robust **Eqraa Toolkit** (formerly Readium Kotlin).

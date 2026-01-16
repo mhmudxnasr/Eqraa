@@ -28,6 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+
 import com.eqraa.reader.settings.ReadingPreferences
 
 // Color constants for consistent theming
@@ -244,8 +248,24 @@ fun DictionaryOverlay(
                             }
                         } else {
                              // Plain Text AI Response
+                            // Render with Basic Markdown (Bold support)
+                             val annotatedString = remember(aiTranslation) {
+                                 buildAnnotatedString {
+                                     val parts = aiTranslation.split("**")
+                                     parts.forEachIndexed { index, part ->
+                                         if (index % 2 == 1) {
+                                             withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                 append(part)
+                                             }
+                                         } else {
+                                             append(part)
+                                         }
+                                     }
+                                 }
+                             }
+                             
                              Text(
-                                 text = aiTranslation,
+                                 text = annotatedString,
                                  fontSize = 18.sp,
                                  lineHeight = 28.sp,
                                  color = TextPrimary,

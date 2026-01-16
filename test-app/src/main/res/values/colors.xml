@@ -10,6 +10,8 @@
     <color name="surface_dark">#000000</color>
     <color name="subtle_light">#F0F0F0</color>
     <color name="subtle_dark">#1A1A1A</color>
-    <color name="nav_glass_light">#FFFFFFFF</color>
-    <color name="nav_glass_dark">#FF000000</color>
+    <color name="accentPrimary">#000000</color>
+    <color name="accentSecondary">#555555</color>
+    <color name="surfaceVariant">#F5F5F5</color>
+    <color name="dividerColor">#0D000000</color>
 </resources>

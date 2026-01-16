@@ -26,14 +26,16 @@ class BookRepository(
 ) {
     var backupManager: BackupManager? = null
     var highlightSyncManager: HighlightSyncManager? = null
+    var bookmarkSyncManager: BookmarkSyncManager? = null
 
     fun books(): Flow<List<Book>> = booksDao.getAllBooks()
 
     suspend fun get(id: Long) = booksDao.get(id)
 
     suspend fun saveProgression(locator: Locator, bookId: Long) {
-        booksDao.saveProgression(locator.toJSON().toString(), bookId)
-        // Progression sync allowed by ReadingProgressSyncManager, skip full backup
+        val timestamp = System.currentTimeMillis()
+        booksDao.saveProgression(locator.toJSON().toString(), timestamp, bookId)
+        // Progression sync is handled by ReadingSyncManager
     }
 
     suspend fun insertBookmark(bookId: Long, publication: Publication, locator: Locator): Long {
@@ -49,13 +51,29 @@ class BookRepository(
             locatorText = Locator.Text().toJSON().toString()
         )
 
-        return booksDao.insertBookmark(bookmark)
+        val bookmarkId = booksDao.insertBookmark(bookmark)
+        
+        // Sync bookmark to cloud
+        val insertedBookmark = booksDao.getBookmarkById(bookmarkId)
+        insertedBookmark?.let {
+            bookmarkSyncManager?.queueBookmarkSync(it)
+        }
+        
+        return bookmarkId
     }
 
     fun bookmarksForBook(bookId: Long): Flow<List<Bookmark>> =
         booksDao.getBookmarksForBook(bookId)
 
-    suspend fun deleteBookmark(bookmarkId: Long) = booksDao.deleteBookmark(bookmarkId)
+    suspend fun deleteBookmark(bookmarkId: Long) {
+        // Sync deletion to cloud before deleting locally
+        val bookmark = booksDao.getBookmarkById(bookmarkId)
+        bookmark?.let {
+            bookmarkSyncManager?.queueBookmarkDelete(it)
+        }
+        
+        booksDao.deleteBookmark(bookmarkId)
+    }
 
     suspend fun highlightById(id: Long): Highlight? =
         booksDao.getHighlightById(id)
