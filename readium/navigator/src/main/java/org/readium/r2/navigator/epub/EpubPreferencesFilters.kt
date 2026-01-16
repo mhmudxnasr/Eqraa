@@ -35,6 +35,20 @@ public object EpubPublicationPreferencesFilter : PreferencesFilter<EpubPreferenc
             readingProgression = preferences.readingProgression,
             language = preferences.language,
             spread = preferences.spread,
-            verticalText = preferences.verticalText
+            verticalText = preferences.verticalText,
+            // Typography
+            fontFamily = preferences.fontFamily,
+            fontSize = preferences.fontSize,
+            fontWeight = preferences.fontWeight,
+            lineHeight = preferences.lineHeight,
+            wordSpacing = preferences.wordSpacing,
+            letterSpacing = preferences.letterSpacing,
+            textAlign = preferences.textAlign,
+            // Layout
+            pageMargins = preferences.pageMargins,
+            paragraphIndent = preferences.paragraphIndent,
+            paragraphSpacing = preferences.paragraphSpacing,
+            typeScale = preferences.typeScale,
+            publisherStyles = preferences.publisherStyles
         )
 }

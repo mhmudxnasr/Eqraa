@@ -227,6 +227,7 @@ class Application : android.app.Application() {
                     realtimeSyncManager?.startListening() // Start listening to realtime changes
                     readingSyncManager.startRealtimeSync() // Start reading progress realtime sync
                     scheduleBackgroundSync()
+                    com.eqraa.reader.utils.NotificationScheduler.scheduleDailyReminder(this@Application)
                 } else {
                      Timber.w("Sync skipped: User not logged in. Please sign in via Settings.")
                 }
