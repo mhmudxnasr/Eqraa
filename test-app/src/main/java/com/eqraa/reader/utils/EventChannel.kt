@@ -26,6 +26,8 @@ class EventChannel<T>(private val channel: Channel<T>, private val sendScope: Co
         }
     }
 
+    fun receiveAsFlow(): Flow<T> = channel.receiveAsFlow()
+
     fun receive(lifecycleOwner: LifecycleOwner, callback: suspend (T) -> Unit) {
         val observer = FlowObserver(lifecycleOwner, channel.receiveAsFlow(), callback)
         lifecycleOwner.lifecycle.addObserver(observer)

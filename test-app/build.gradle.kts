@@ -145,6 +145,14 @@ dependencies {
     // Supabase
     implementation(platform(libs.supabase.bom))
     implementation(libs.bundles.supabase)
+
+    // Unit Testing
+    testImplementation(libs.bundles.test)
+    testImplementation(libs.kotlin.junit)
+
+    // Android Instrumentation Testing
+    androidTestImplementation(libs.bundles.androidTest)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 kotlin {
